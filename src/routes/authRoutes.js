@@ -63,30 +63,5 @@ router.post('/googlelogin', async (req, res) => {
 })
 
 
-
-
-// // Step 1: Initiate Google OAuth login
-// router.get('/auth/google', passport.authenticate('google', { scope: ['email', 'profile'] }));
-
-// // Step 2: Handle Google OAuth callback, generate JWT, and send it as JSON
-// router.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/auth/google/failure' }), (req, res) => {
-
-
-//   console.log('en augth google')
-//   // Create a JWT token for the user
-//   const token = jwt.sign({ id: req.user.id, email: req.user.email }, SECRET_KEY, { expiresIn: '1h' });
-
-//   // Send the token back as JSON (no redirect)
-//   res.json({ success: true, token });
-// });
-
-
-
-// // Optional failure route
-// router.get('/auth/google/failure', (req, res) => {
-//   console.log('en augh failure')
-//   res.status(401).json({ success: false, message: 'Failed to authenticate' });
-// });
-
 // Export the router
 module.exports = router;
