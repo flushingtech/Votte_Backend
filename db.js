@@ -1,7 +1,10 @@
+require('dotenv').config(); // Load environment variables
+
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  //connectionString: "postgres://default:m2nK4zDCoewi@ep-lively-wood-a4euf753.us-east-1.aws.neon.tech:5432/verceldb?sslmode=require"
-})
+  connectionString: process.env.DATABASE_URL,  // Read connection string from environment
+  ssl: false  // Temporarily disable SSL to check if this resolves the password issue
+});
 
 module.exports = pool;
