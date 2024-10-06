@@ -1,10 +1,10 @@
-require('dotenv').config(); // Load environment variables
-
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,  // Read connection string from environment
-  ssl: false  // Temporarily disable SSL to check if this resolves the password issue
+  connectionString: process.env.DATABASE_URL,  // Ensure this is properly set
+  ssl: {
+    rejectUnauthorized: false,  // Ensure SSL is handled properly if required by your host
+  }
 });
 
 module.exports = pool;

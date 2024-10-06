@@ -1,7 +1,8 @@
 CREATE TABLE ideas (
   id SERIAL PRIMARY KEY,
-  google_id VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
   idea TEXT NOT NULL,
-  votes INTEGER DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  description TEXT NOT NULL,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP  -- No default value, remains NULL unless updated
 );
