@@ -16,3 +16,11 @@ CREATE TABLE votes (
     voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- Timestamp for when the vote was made
     FOREIGN KEY (idea_id) REFERENCES ideas (id) ON DELETE CASCADE  -- Ensure referential integrity
 );
+
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    event_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
