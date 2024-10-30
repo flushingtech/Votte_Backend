@@ -3,6 +3,7 @@ const session = require('express-session');
 const passport = require('passport');
 const authRoutes = require('./src/routes/authRoutes');
 const ideasRoute = require('./src/routes/ideasRoutes');
+const eventsRouter = require('./src/routes/eventsRoutes');
 const cors = require('cors');
 const pool = require('./db');  // Import the database connection
 
@@ -18,6 +19,8 @@ app.use('/', authRoutes);
 
 // Use the ideas route
 app.use('/api/ideas', ideasRoute);
+
+app.use('/api/events', eventsRouter);
 
 // Default route for root '/'
 app.get('/', (req, res) => {
