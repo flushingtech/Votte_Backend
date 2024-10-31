@@ -89,6 +89,22 @@ router.put('/editIdea/:id', async (req, res) => {
   }
 });
 
+// Delete Idea Endpoint
+router.delete('/delete-idea/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query('DELETE FROM ideas WHERE id = $1 RETURNING *', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+    res.json({ message: 'Idea deleted successfully', idea: result.rows[0] });
+  } catch (error) {
+    console.error('Error deleting idea:', error);
+    res.status(500).json({ message: 'Failed to delete idea' });
+  }
+});
+
 // POST endpoint to vote for an idea
 router.post('/vote/:id', async (req, res) => {
   const { id } = req.params;  // Idea ID
