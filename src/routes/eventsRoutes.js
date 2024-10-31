@@ -35,4 +35,20 @@ router.get('/all-events', async (req, res) => {
     }
 });
 
+// Endpoint to delete an event by ID
+router.delete('/delete-event/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const result = await pool.query('DELETE FROM events WHERE id = $1 RETURNING *', [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+        res.json({ message: 'Event deleted successfully', event: result.rows[0] });
+    } catch (error) {
+        console.error('Error deleting event:', error);
+        res.status(500).json({ message: 'Failed to delete event' });
+    }
+});
+
 module.exports = router;
