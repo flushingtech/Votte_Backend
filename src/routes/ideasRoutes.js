@@ -5,24 +5,33 @@ const router = express.Router();
 const MAX_IDEAS_PER_USER = 5;  // You can easily change this limit
 
 router.post('/submitIdea', async (req, res) => {
-  const { email, idea, description, technologies } = req.body;  // Now accepting technologies
+  const { email, idea, description, technologies, event_id } = req.body;
 
-  console.log('Received idea submission:', { email, idea, description, technologies });
+  console.log('Received idea submission:', { email, idea, description, technologies, event_id });
 
   try {
+    // Check if the event_id exists in the events table
+    const eventCheckQuery = 'SELECT * FROM events WHERE id = $1';
+    const eventCheckResult = await pool.query(eventCheckQuery, [event_id]);
+    if (eventCheckResult.rowCount === 0) {
+      return res.status(400).json({ message: 'Invalid event ID' });
+    }
+
     // Check how many ideas this user has already submitted
     const ideasCountQuery = 'SELECT COUNT(*) FROM ideas WHERE email = $1';
     const ideasCountResult = await pool.query(ideasCountQuery, [email]);
-    const ideasCount = parseInt(ideasCountResult.rows[0].count, 10);  // Parse the count
+    const ideasCount = parseInt(ideasCountResult.rows[0].count, 10);
 
-    // If user has reached the limit
     if (ideasCount >= MAX_IDEAS_PER_USER) {
       return res.status(400).json({ message: `You can only submit up to ${MAX_IDEAS_PER_USER} ideas.` });
     }
 
-    // Insert the new idea along with the description and technologies
-    const insertQuery = 'INSERT INTO ideas (email, idea, description, technologies) VALUES ($1, $2, $3, $4) RETURNING *';
-    const result = await pool.query(insertQuery, [email, idea, description, technologies]);
+    // Insert the new idea with the event_id
+    const insertQuery = `
+      INSERT INTO ideas (email, idea, description, technologies, event_id)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *
+    `;
+    const result = await pool.query(insertQuery, [email, idea, description, technologies, event_id]);
 
     console.log('Idea inserted successfully:', result.rows[0]);
 
@@ -35,6 +44,7 @@ router.post('/submitIdea', async (req, res) => {
     res.status(500).json({ message: 'Failed to submit idea', error: error.message });
   }
 });
+
 
 // GET endpoint to fetch all ideas sorted by vote count
 router.get('/allIdeas', async (req, res) => {
@@ -198,6 +208,20 @@ router.get('/votedIdeas/:email', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch voted ideas' });
   }
 });
+
+// GET ideas by event ID
+router.get('/:eventId', async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const result = await pool.query('SELECT * FROM ideas WHERE event_id = $1', [eventId]);
+    res.status(200).json({ ideas: result.rows });
+  } catch (error) {
+    console.error('Error fetching ideas for event:', error);
+    res.status(500).json({ message: 'Failed to fetch ideas for event', error: error.message });
+  }
+});
+
+
 
 
 module.exports = router;
