@@ -221,7 +221,32 @@ router.get('/:eventId', async (req, res) => {
   }
 });
 
+router.get('/user/:email', async (req, res) => {
+  const { email } = req.params;
+  try {
+    const result = await pool.query('SELECT * FROM ideas WHERE email = $1', [email]);
+    res.status(200).json({ ideas: result.rows });
+  } catch (error) {
+    console.error('Error fetching user ideas:', error);
+    res.status(500).json({ message: 'Failed to fetch user ideas' });
+  }
+});
 
-
+router.get('/voted/:email', async (req, res) => {
+  const { email } = req.params;
+  try {
+    const query = `
+      SELECT ideas.*
+      FROM ideas
+      INNER JOIN votes ON ideas.id = votes.idea_id
+      WHERE votes.user_email = $1
+    `;
+    const result = await pool.query(query, [email]);
+    res.status(200).json({ ideas: result.rows });
+  } catch (error) {
+    console.error('Error fetching voted ideas:', error);
+    res.status(500).json({ message: 'Failed to fetch voted ideas' });
+  }
+});
 
 module.exports = router;
