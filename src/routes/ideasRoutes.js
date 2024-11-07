@@ -5,9 +5,9 @@ const router = express.Router();
 const MAX_IDEAS_PER_USER = 5;
 
 router.post('/submitIdea', async (req, res) => {
-  const { email, idea, description, technologies, event_id } = req.body;
+  const { email, idea, description, technologies, event_id, is_built = false } = req.body;
 
-  console.log('Received idea submission:', { email, idea, description, technologies, event_id });
+  console.log('Received idea submission:', { email, idea, description, technologies, event_id, is_built });
 
   try {
     const eventCheckQuery = 'SELECT * FROM events WHERE id = $1';
@@ -25,10 +25,10 @@ router.post('/submitIdea', async (req, res) => {
     }
 
     const insertQuery = `
-      INSERT INTO ideas (email, idea, description, technologies, event_id)
-      VALUES ($1, $2, $3, $4, $5) RETURNING *
+      INSERT INTO ideas (email, idea, description, technologies, event_id, is_built)
+      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
     `;
-    const result = await pool.query(insertQuery, [email, idea, description, technologies, event_id]);
+    const result = await pool.query(insertQuery, [email, idea, description, technologies, event_id, is_built]);
 
     console.log('Idea inserted successfully:', result.rows[0]);
 
@@ -212,7 +212,7 @@ router.get('/user/:email', async (req, res) => {
   try {
     const query = `
       SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
-             events.title AS event_title
+             events.title AS event_title, ideas.is_built  -- Include is_built field
       FROM ideas
       INNER JOIN events ON ideas.event_id = events.id
       WHERE ideas.email = $1
@@ -225,6 +225,7 @@ router.get('/user/:email', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch user ideas' });
   }
 });
+
 
 // Endpoint to get liked ideas with event titles
 router.get('/liked/:email', async (req, res) => {
