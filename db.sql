@@ -4,16 +4,17 @@ CREATE TABLE ideas (
     idea TEXT NOT NULL,  -- The idea description
     description TEXT NOT NULL,  -- Additional description for the idea
     technologies TEXT NOT NULL,  -- Technologies used to bring the idea to life
-    votes INT DEFAULT 0,  -- Vote count, defaulting to 0
+    likes INT DEFAULT 0,  -- Like count, defaulting to 0
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- Auto-generated creation timestamp
-    updated_at TIMESTAMP DEFAULT NULL  -- Timestamp for last update, can be NULL initially
+    updated_at TIMESTAMP DEFAULT NULL,  -- Timestamp for last update, can be NULL initially
+    event_id INT REFERENCES events(id) ON DELETE CASCADE  -- Foreign key to events table
 );
 
-CREATE TABLE votes (
-    id SERIAL PRIMARY KEY,  -- Auto-incrementing ID for the vote entry
-    user_email VARCHAR(255) NOT NULL,  -- Email of the user who voted
-    idea_id INT NOT NULL,  -- ID of the idea being voted for
-    voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- Timestamp for when the vote was made
+CREATE TABLE likes (
+    id SERIAL PRIMARY KEY,  -- Auto-incrementing ID for the like entry
+    user_email VARCHAR(255) NOT NULL,  -- Email of the user who liked
+    idea_id INT NOT NULL,  -- ID of the idea being liked
+    liked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- Timestamp for when the like was made
     FOREIGN KEY (idea_id) REFERENCES ideas (id) ON DELETE CASCADE  -- Ensure referential integrity
 );
 

@@ -1,8 +1,8 @@
 const express = require('express');
-const pool = require('../../db');  // Import the existing pool configuration
+const pool = require('../../db');
 const router = express.Router();
 
-const MAX_IDEAS_PER_USER = 5;  // You can easily change this limit
+const MAX_IDEAS_PER_USER = 5;
 
 router.post('/submitIdea', async (req, res) => {
   const { email, idea, description, technologies, event_id } = req.body;
@@ -10,14 +10,12 @@ router.post('/submitIdea', async (req, res) => {
   console.log('Received idea submission:', { email, idea, description, technologies, event_id });
 
   try {
-    // Check if the event_id exists in the events table
     const eventCheckQuery = 'SELECT * FROM events WHERE id = $1';
     const eventCheckResult = await pool.query(eventCheckQuery, [event_id]);
     if (eventCheckResult.rowCount === 0) {
       return res.status(400).json({ message: 'Invalid event ID' });
     }
 
-    // Check how many ideas this user has already submitted
     const ideasCountQuery = 'SELECT COUNT(*) FROM ideas WHERE email = $1';
     const ideasCountResult = await pool.query(ideasCountQuery, [email]);
     const ideasCount = parseInt(ideasCountResult.rows[0].count, 10);
@@ -26,7 +24,6 @@ router.post('/submitIdea', async (req, res) => {
       return res.status(400).json({ message: `You can only submit up to ${MAX_IDEAS_PER_USER} ideas.` });
     }
 
-    // Insert the new idea with the event_id
     const insertQuery = `
       INSERT INTO ideas (email, idea, description, technologies, event_id)
       VALUES ($1, $2, $3, $4, $5) RETURNING *
@@ -45,12 +42,9 @@ router.post('/submitIdea', async (req, res) => {
   }
 });
 
-
-// GET endpoint to fetch all ideas sorted by vote count
 router.get('/allIdeas', async (req, res) => {
   try {
-    // Fetch all ideas, including technologies, ordered by votes (descending) and created_at (descending for tie cases)
-    const fetchQuery = 'SELECT * FROM ideas ORDER BY votes DESC, created_at DESC';  
+    const fetchQuery = 'SELECT * FROM ideas ORDER BY likes DESC, created_at DESC';  
     const result = await pool.query(fetchQuery);
 
     console.log('Fetched ideas:', result.rows);
@@ -67,13 +61,12 @@ router.get('/allIdeas', async (req, res) => {
 
 // PUT endpoint to edit an existing idea
 router.put('/editIdea/:id', async (req, res) => {
-  const { id } = req.params;  // Get the idea ID from the request params
-  const { idea, description, technologies } = req.body;  // Include technologies
+  const { id } = req.params;
+  const { idea, description, technologies } = req.body;
 
   console.log(`Editing idea ID ${id} with new data:`, { idea, description, technologies });
 
   try {
-    // Update the idea, description, and technologies, and set updatedAt only when updating the idea
     const updateQuery = `
       UPDATE ideas
       SET idea = $1, description = $2, technologies = $3, updatedAt = CURRENT_TIMESTAMP
@@ -82,7 +75,6 @@ router.put('/editIdea/:id', async (req, res) => {
     `;
     const result = await pool.query(updateQuery, [idea, description, technologies, id]);
 
-    // If no rows were updated, the idea with the given ID does not exist
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Idea not found' });
     }
@@ -99,7 +91,7 @@ router.put('/editIdea/:id', async (req, res) => {
   }
 });
 
-// Delete Idea Endpoint
+// DELETE endpoint to delete an idea
 router.delete('/delete-idea/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -115,97 +107,90 @@ router.delete('/delete-idea/:id', async (req, res) => {
   }
 });
 
-// POST endpoint to vote for an idea
-router.post('/vote/:id', async (req, res) => {
-  const { id } = req.params;  // Idea ID
-  const { email } = req.body;  // User's email from request body
-  const MAX_VOTES_PER_USER = 3;
+// POST endpoint to like an idea
+router.post('/like/:id', async (req, res) => {
+  const { id } = req.params;
+  const { email } = req.body;
+  const MAX_LIKES_PER_USER = 3;
 
   try {
-    // Check how many times this user has voted
-    const voteCountQuery = 'SELECT COUNT(*) FROM votes WHERE user_email = $1';
-    const voteCountResult = await pool.query(voteCountQuery, [email]);
-    const totalVotes = parseInt(voteCountResult.rows[0].count, 10);  // Total number of votes by the user
+    const likeCountQuery = 'SELECT COUNT(*) FROM likes WHERE user_email = $1';
+    const likeCountResult = await pool.query(likeCountQuery, [email]);
+    const totalLikes = parseInt(likeCountResult.rows[0].count, 10);
 
-    if (totalVotes >= MAX_VOTES_PER_USER) {
-      return res.status(400).json({ message: `You can only vote up to ${MAX_VOTES_PER_USER} times.` });
+    if (totalLikes >= MAX_LIKES_PER_USER) {
+      return res.status(400).json({ message: `You can only like up to ${MAX_LIKES_PER_USER} times.` });
     }
 
-    // Check if the user has already voted for this idea
-    const existingVoteQuery = 'SELECT * FROM votes WHERE user_email = $1 AND idea_id = $2';
-    const existingVoteResult = await pool.query(existingVoteQuery, [email, id]);
+    const existingLikeQuery = 'SELECT * FROM likes WHERE user_email = $1 AND idea_id = $2';
+    const existingLikeResult = await pool.query(existingLikeQuery, [email, id]);
 
-    if (existingVoteResult.rows.length > 0) {
-      return res.status(400).json({ message: 'You have already voted for this idea.' });
+    if (existingLikeResult.rows.length > 0) {
+      return res.status(400).json({ message: 'You have already liked this idea.' });
     }
 
-    // Increment the vote count for the idea
-    const voteUpdateQuery = 'UPDATE ideas SET votes = votes + 1 WHERE id = $1 RETURNING *';
-    const voteResult = await pool.query(voteUpdateQuery, [id]);
+    const likeUpdateQuery = 'UPDATE ideas SET likes = likes + 1 WHERE id = $1 RETURNING *';
+    const likeResult = await pool.query(likeUpdateQuery, [id]);
 
-    // Insert the user's vote into the votes table
-    const insertVoteQuery = 'INSERT INTO votes (user_email, idea_id) VALUES ($1, $2)';
-    await pool.query(insertVoteQuery, [email, id]);
+    const insertLikeQuery = 'INSERT INTO likes (user_email, idea_id) VALUES ($1, $2)';
+    await pool.query(insertLikeQuery, [email, id]);
 
-    console.log(`User ${email} voted for idea ID ${id}`);
+    console.log(`User ${email} liked idea ID ${id}`);
 
     res.status(200).json({
-      message: 'Vote recorded successfully!',
-      idea: voteResult.rows[0]
+      message: 'Like recorded successfully!',
+      idea: likeResult.rows[0]
     });
   } catch (error) {
-    console.error('Error while voting:', error);
-    res.status(500).json({ message: 'Failed to record vote', error: error.message });
+    console.error('Error while liking:', error);
+    res.status(500).json({ message: 'Failed to record like', error: error.message });
   }
 });
 
-// POST endpoint to unvote an idea
-router.post('/unvote/:id', async (req, res) => {
-  const { id } = req.params;  // Idea ID
-  const { email } = req.body;  // User's email from request body
+// POST endpoint to unlike an idea
+router.post('/unlike/:id', async (req, res) => {
+  const { id } = req.params;
+  const { email } = req.body;
 
   try {
-    // Check if the user has voted for this idea
-    const existingVoteQuery = 'SELECT * FROM votes WHERE user_email = $1 AND idea_id = $2';
-    const existingVoteResult = await pool.query(existingVoteQuery, [email, id]);
+    const existingLikeQuery = 'SELECT * FROM likes WHERE user_email = $1 AND idea_id = $2';
+    const existingLikeResult = await pool.query(existingLikeQuery, [email, id]);
 
-    if (existingVoteResult.rows.length === 0) {
-      return res.status(400).json({ message: 'You have not voted for this idea.' });
+    if (existingLikeResult.rows.length === 0) {
+      return res.status(400).json({ message: 'You have not liked this idea.' });
     }
 
-    // Decrement the vote count for the idea
-    const unvoteUpdateQuery = 'UPDATE ideas SET votes = votes - 1 WHERE id = $1 RETURNING *';
-    const unvoteResult = await pool.query(unvoteUpdateQuery, [id]);
+    const unlikeUpdateQuery = 'UPDATE ideas SET likes = likes - 1 WHERE id = $1 RETURNING *';
+    const unlikeResult = await pool.query(unlikeUpdateQuery, [id]);
 
-    // Remove the user's vote record
-    const deleteVoteQuery = 'DELETE FROM votes WHERE user_email = $1 AND idea_id = $2';
-    await pool.query(deleteVoteQuery, [email, id]);
+    const deleteLikeQuery = 'DELETE FROM likes WHERE user_email = $1 AND idea_id = $2';
+    await pool.query(deleteLikeQuery, [email, id]);
 
-    console.log(`User ${email} unvoted for idea ID ${id}`);
+    console.log(`User ${email} unliked idea ID ${id}`);
 
     res.status(200).json({
-      message: 'Unvote recorded successfully!',
-      idea: unvoteResult.rows[0]
+      message: 'Unlike recorded successfully!',
+      idea: unlikeResult.rows[0]
     });
   } catch (error) {
-    console.error('Error while unvoting:', error);
-    res.status(500).json({ message: 'Failed to record unvote', error: error.message });
+    console.error('Error while unliking:', error);
+    res.status(500).json({ message: 'Failed to record unlike', error: error.message });
   }
 });
 
-// GET endpoint to fetch the ideas a user has voted for
-router.get('/votedIdeas/:email', async (req, res) => {
+// GET endpoint to fetch the ideas a user has liked
+router.get('/likedIdeas/:email', async (req, res) => {
   const { email } = req.params;
 
   try {
-    const votedIdeasQuery = 'SELECT idea_id FROM votes WHERE user_email = $1';
-    const result = await pool.query(votedIdeasQuery, [email]);
+    const likedIdeasQuery = 'SELECT idea_id FROM likes WHERE user_email = $1';
+    const result = await pool.query(likedIdeasQuery, [email]);
 
-    const votedIdeaIds = result.rows.map(row => row.idea_id);  // Extract idea IDs
-    res.status(200).json({ votedIdeaIds });
+    const likedIdeaIds = result.rows.map(row => row.idea_id);
+    res.status(200).json({ likedIdeaIds });
   } catch (error) {
-    console.error('Error fetching voted ideas:', error);
-    res.status(500).json({ message: 'Failed to fetch voted ideas' });
+    console.error('Error fetching liked ideas:', error);
+    res.status(500).json({ message: 'Failed to fetch liked ideas' });
   }
 });
 
@@ -232,20 +217,20 @@ router.get('/user/:email', async (req, res) => {
   }
 });
 
-router.get('/voted/:email', async (req, res) => {
+router.get('/liked/:email', async (req, res) => {
   const { email } = req.params;
   try {
     const query = `
       SELECT ideas.*
       FROM ideas
-      INNER JOIN votes ON ideas.id = votes.idea_id
-      WHERE votes.user_email = $1
+      INNER JOIN likes ON ideas.id = likes.idea_id
+      WHERE likes.user_email = $1
     `;
     const result = await pool.query(query, [email]);
     res.status(200).json({ ideas: result.rows });
   } catch (error) {
-    console.error('Error fetching voted ideas:', error);
-    res.status(500).json({ message: 'Failed to fetch voted ideas' });
+    console.error('Error fetching liked ideas:', error);
+    res.status(500).json({ message: 'Failed to fetch liked ideas' });
   }
 });
 
