@@ -206,10 +206,19 @@ router.get('/:eventId', async (req, res) => {
   }
 });
 
+// Endpoint to get user ideas with event titles
 router.get('/user/:email', async (req, res) => {
   const { email } = req.params;
   try {
-    const result = await pool.query('SELECT * FROM ideas WHERE email = $1', [email]);
+    const query = `
+      SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
+             events.title AS event_title
+      FROM ideas
+      INNER JOIN events ON ideas.event_id = events.id
+      WHERE ideas.email = $1
+      ORDER BY ideas.created_at DESC
+    `;
+    const result = await pool.query(query, [email]);
     res.status(200).json({ ideas: result.rows });
   } catch (error) {
     console.error('Error fetching user ideas:', error);
@@ -217,14 +226,18 @@ router.get('/user/:email', async (req, res) => {
   }
 });
 
+// Endpoint to get liked ideas with event titles
 router.get('/liked/:email', async (req, res) => {
   const { email } = req.params;
   try {
     const query = `
-      SELECT ideas.*
+      SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
+             events.title AS event_title
       FROM ideas
+      INNER JOIN events ON ideas.event_id = events.id
       INNER JOIN likes ON ideas.id = likes.idea_id
       WHERE likes.user_email = $1
+      ORDER BY ideas.created_at DESC
     `;
     const result = await pool.query(query, [email]);
     res.status(200).json({ ideas: result.rows });
