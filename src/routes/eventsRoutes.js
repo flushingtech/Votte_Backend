@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../../db'); // PostgreSQL pool connection
 
 // Authorized admin emails
-const authorizedAdmins = ['flushingtech.nyc@gmail.com', 'adriana@deonarinedesigns.com', 'admin2@example.com'];
+const authorizedAdmins = ['flushingtech.nyc@gmail.com', 'adriana@deonarinedesigns.com', 'tkhattab1999@gmail.com', 'admin2@example.com'];
 
 router.post('/add-event', async (req, res) => {
     const { email, title, eventDate } = req.body;
