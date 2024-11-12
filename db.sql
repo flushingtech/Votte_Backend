@@ -25,3 +25,8 @@ CREATE TABLE events (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE admin (
+    email VARCHAR(255) PRIMARY KEY
+);
+
+

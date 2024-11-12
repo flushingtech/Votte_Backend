@@ -91,11 +91,17 @@ router.put('/editIdea/:id', async (req, res) => {
   }
 });
 
-// DELETE endpoint to delete an idea
+// DELETE endpoint to delete an idea (requires admin)
 router.delete('/delete-idea/:id', async (req, res) => {
   const { id } = req.params;
+  const { email } = req.body;
 
   try {
+    const adminResult = await pool.query('SELECT email FROM admin WHERE email = $1', [email]);
+    if (adminResult.rowCount === 0) {
+      return res.status(403).json({ message: 'Unauthorized: Only admins can delete ideas' });
+    }
+
     const result = await pool.query('DELETE FROM ideas WHERE id = $1 RETURNING *', [id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Idea not found' });
