@@ -91,27 +91,33 @@ router.put('/editIdea/:id', async (req, res) => {
   }
 });
 
-// DELETE endpoint to delete an idea (requires admin)
 router.delete('/delete-idea/:id', async (req, res) => {
   const { id } = req.params;
   const { email } = req.body;
 
+  console.log('Admin email for deletion:', email);
+
   try {
+    // Check if the email belongs to an admin
     const adminResult = await pool.query('SELECT email FROM admin WHERE email = $1', [email]);
     if (adminResult.rowCount === 0) {
       return res.status(403).json({ message: 'Unauthorized: Only admins can delete ideas' });
     }
 
+    // Proceed to delete the idea
     const result = await pool.query('DELETE FROM ideas WHERE id = $1 RETURNING *', [id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Idea not found' });
     }
+
     res.json({ message: 'Idea deleted successfully', idea: result.rows[0] });
   } catch (error) {
     console.error('Error deleting idea:', error);
-    res.status(500).json({ message: 'Failed to delete idea' });
+    res.status(500).json({ message: 'Failed to delete idea', error: error.message });
   }
 });
+
+
 
 // POST endpoint to like an idea
 router.post('/like/:id', async (req, res) => {
@@ -212,13 +218,15 @@ router.get('/:eventId', async (req, res) => {
   }
 });
 
-// Endpoint to get user ideas with event titles
+// Endpoint to get user ideas with event titles and event_id
 router.get('/user/:email', async (req, res) => {
   const { email } = req.params;
   try {
     const query = `
       SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
-             events.title AS event_title, ideas.is_built  -- Include is_built field
+             ideas.event_id,  -- Include event_id here
+             events.title AS event_title, 
+             ideas.is_built  -- Include is_built field
       FROM ideas
       INNER JOIN events ON ideas.event_id = events.id
       WHERE ideas.email = $1
@@ -231,6 +239,7 @@ router.get('/user/:email', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch user ideas' });
   }
 });
+
 
 
 // Endpoint to get liked ideas with event titles
