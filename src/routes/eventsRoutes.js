@@ -134,4 +134,21 @@ router.delete("/delete-event/:id", async (req, res) => {
     }
 });
 
+// Get ideas by event ID
+router.get("/:eventId/ideas", async (req, res) => {
+    const { eventId } = req.params;
+    try {
+      const result = await pool.query(
+        "SELECT * FROM ideas WHERE event_id = $1 ORDER BY created_at DESC",
+        [eventId]
+      );
+      res.status(200).json({ ideas: result.rows });
+    } catch (error) {
+      console.error("Error fetching ideas for event:", error);
+      res.status(500).json({ message: "Failed to fetch ideas for event" });
+    }
+  });
+  
+
+
 module.exports = router;
