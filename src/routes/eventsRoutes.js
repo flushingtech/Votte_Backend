@@ -3,6 +3,7 @@ const axios = require("axios");
 const { parseStringPromise } = require("xml2js"); // Use the promise version of xml2js
 const pool = require("../../db");
 const router = express.Router();
+const { getEventDate } = require("../utils/dateTimeUtils");
 
 // Check if a user is an admin
 router.post("/check-admin", async (req, res) => {
@@ -35,7 +36,6 @@ async function fetchRssAndAddEvents() {
         console.log("Fetching RSS feed...");
         const rssResponse = await axios.get(rssUrl);
         const rssData = rssResponse.data;
-
         // Parse RSS XML data
         const parsedResult = await parseStringPromise(rssData);
         const rssItems = parsedResult.rss.channel[0].item;
@@ -44,7 +44,7 @@ async function fetchRssAndAddEvents() {
             const originalTitle = item.title[0];
             const eventTitle =
                 titleCorrespondence[originalTitle] || originalTitle;
-            const eventDate = new Date(item.pubDate[0]);
+            const eventDate = getEventDate(item.description[0]);
 
             console.log(`Checking event: ${eventTitle} on ${eventDate}`);
 
@@ -74,7 +74,6 @@ async function fetchRssAndAddEvents() {
     }
 }
 // Ensure this function runs when `/all-events` is called
-
 router.get("/all-events", async (req, res) => {
     try {
         // First, fetch RSS feed and add events to the database
@@ -138,17 +137,15 @@ router.delete("/delete-event/:id", async (req, res) => {
 router.get("/:eventId/ideas", async (req, res) => {
     const { eventId } = req.params;
     try {
-      const result = await pool.query(
-        "SELECT * FROM ideas WHERE event_id = $1 ORDER BY created_at DESC",
-        [eventId]
-      );
-      res.status(200).json({ ideas: result.rows });
+        const result = await pool.query(
+            "SELECT * FROM ideas WHERE event_id = $1 ORDER BY created_at DESC",
+            [eventId],
+        );
+        res.status(200).json({ ideas: result.rows });
     } catch (error) {
-      console.error("Error fetching ideas for event:", error);
-      res.status(500).json({ message: "Failed to fetch ideas for event" });
+        console.error("Error fetching ideas for event:", error);
+        res.status(500).json({ message: "Failed to fetch ideas for event" });
     }
-  });
-  
-
+});
 
 module.exports = router;
