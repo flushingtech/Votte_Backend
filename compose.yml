@@ -10,7 +10,7 @@ services:
       DATABASE_URL: postgres://postgres:mysecretpassword@db:5432/mydatabase?sslmode=disable
       GOOGLE_CLIENT_ID: google-client-id
       JWT_SECRET: jwt-secret
-      SERVER_RUL: server-url
+      SERVER_URL: server-url
     ports:
       - 5500:5500
     volumes:
