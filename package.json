@@ -25,6 +25,7 @@
     "express": "^4.21.0",
     "express-session": "^1.18.0",
     "jsonwebtoken": "^9.0.2",
+    "node-html-parser": "^6.1.13",
     "passport": "^0.7.0",
     "passport-google-oauth2": "^0.2.0",
     "pg": "^8.13.1",
