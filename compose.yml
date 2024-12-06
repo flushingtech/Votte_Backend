@@ -20,9 +20,7 @@ services:
     command: sh -c "npm install && npx nodemon --watch . --legacy-watch index.js"
 
   db:
-    build:
-      context: ./docker_files
-      dockerfile: Dockerfile_postgres
+    image: postgres:15-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: mysecretpassword

@@ -13,7 +13,23 @@ This is the backend for Votte, which will allow Flushing Tech members to vote on
 - **Powered by Express and Node**: The backend API is built with Express and Node.js, providing robust and scalable server-side functionality.
 
 ### Database
-- **PostgreSQL**: All data is stored in a PostgreSQL database, ensuring reliable data management and integrity.
+
+#### PostgreSQL
+
+All data is stored in a PostgreSQL database, ensuring reliable data management and integrity.
+
+Spin it up today with `docker-compose up -d`
+
+#### ORM
+
+[Drizzle](https://orm.drizzle.team/docs/overview) is used to provide database abstraction in the app.
+
+It's also used to apply changes to the database, also known as "migrations".
+
+- Update `src/db/schemas/` to make changes to the db, then,
+- `npm run db` to apply changes to the database.
+- `npm run db-studio` to launch a UI for managing the database.
+
 
 ### Frontend
 - **React**: The frontend is built with React, delivering a smooth and user-friendly interface.
