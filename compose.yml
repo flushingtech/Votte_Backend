@@ -1,24 +1,4 @@
 services:
-  app:
-    image: node:lts-alpine
-    working_dir: /app
-    depends_on:
-      db:
-        condition: service_healthy
-        restart: true
-    environment:
-      DATABASE_URL: postgres://postgres:mysecretpassword@db:5432/mydatabase?sslmode=disable
-      GOOGLE_CLIENT_ID: google-client-id
-      JWT_SECRET: jwt-secret
-      SERVER_RUL: server-url
-    ports:
-      - 5500:5500
-    volumes:
-      - type: bind
-        source: ./
-        target: /app
-    command: sh -c "npm install && npx nodemon --watch . --legacy-watch index.js"
-
   db:
     image: postgres:15-alpine
     environment:
