@@ -1,4 +1,4 @@
-import { pgTable, varchar, serial, date, timestamp, foreignKey, text, integer } from "drizzle-orm/pg-core"
+import { pgTable, varchar, serial, date, timestamp, foreignKey, text, integer, boolean } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -20,6 +20,7 @@ export const ideas = pgTable("ideas", {
 	idea: text().notNull(),
 	description: text().notNull(),
 	technologies: text().notNull(),
+	isBuilt: boolean("is_built").default(false),
 	likes: integer().default(0),
 	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
 	updatedAt: timestamp("updated_at", { mode: 'string' }),
