@@ -48,6 +48,10 @@ async function fetchRssAndAddEvents() {
 
             console.log(`Checking event: ${eventTitle} on ${eventDate}`);
 
+            if (eventTitle.toLowerCase().includes("happy hour")) {
+                console.log(`Skipping Happy Hour event: ${eventTitle}`);
+                continue; // Skip this iteration
+            }          
             // Check if event already exists in the database
             const checkEventQuery =
                 "SELECT * FROM events WHERE title = $1 AND event_date = $2";
