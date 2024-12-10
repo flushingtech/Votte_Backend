@@ -26,7 +26,6 @@ function getEventDate(text) {
 		const currMonth = new Date(str).getMonth();
 		const nowMonth = new Date().getMonth();
 		const nowYear = new Date().getFullYear();
-		console.log(new Date(), nowYear, typeof nowYear);
 		return currMonth >= nowMonth ? nowYear : nowYear + 1;
 	}
 }
