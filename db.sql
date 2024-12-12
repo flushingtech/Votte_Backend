@@ -25,6 +25,7 @@ CREATE TABLE events (
     title VARCHAR(255) NOT NULL,
     event_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    stage INT DEFAULT 1
 );
 
 CREATE TABLE admin (
