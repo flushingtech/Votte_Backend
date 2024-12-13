@@ -4,6 +4,7 @@ const passport = require('passport');
 const authRoutes = require('./src/routes/authRoutes');
 const ideasRoute = require('./src/routes/ideasRoutes');
 const eventsRouter = require('./src/routes/eventsRoutes');
+const votesRouter = require('./src/routes/votesRoutes');
 const cors = require('cors');
 const pool = require('./db');  // Import the database connection
 
@@ -21,6 +22,8 @@ app.use('/', authRoutes);
 app.use('/api/ideas', ideasRoute);
 
 app.use('/api/events', eventsRouter);
+
+app.use('/api/votes', votesRouter);
 
 // Default route for root '/'
 app.get('/', (req, res) => {
