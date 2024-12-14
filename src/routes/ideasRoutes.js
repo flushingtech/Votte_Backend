@@ -263,4 +263,34 @@ router.get('/liked/:email', async (req, res) => {
   }
 });
 
+// PUT endpoint to set the stage of an idea
+router.put('/set-stage/:id', async (req, res) => {
+  const { id } = req.params;
+  const { stage } = req.body; // Accept target stage from request body
+
+  try {
+    const updateQuery = `
+      UPDATE ideas
+      SET stage = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+    const result = await pool.query(updateQuery, [stage, id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+
+    console.log(`Idea stage updated successfully:`, result.rows[0]);
+
+    res.status(200).json({
+      message: 'Idea stage updated successfully!',
+      idea: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error setting stage:', error);
+    res.status(500).json({ message: 'Failed to set stage', error: error.message });
+  }
+});
+
 module.exports = router;
