@@ -31,3 +31,12 @@ CREATE TABLE events (
 CREATE TABLE admin (
     email VARCHAR(255) PRIMARY KEY
 );
+
+CREATE TABLE votes (
+    id SERIAL PRIMARY KEY,            -- Unique ID for each vote
+    user_email VARCHAR(255) NOT NULL, -- Email of the user who voted
+    idea_id INT NOT NULL,             -- ID of the idea being voted on
+    rating INT NOT NULL CHECK (rating BETWEEN 1 AND 10), -- Rating given by the user
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Timestamp when the vote was created
+    FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE       -- Foreign key to ideas table
+);
