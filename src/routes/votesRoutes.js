@@ -79,34 +79,4 @@ router.get('/user/:user_email', async (req, res) => {
   }
 });
 
-// Update a vote
-router.put('/update/:id', async (req, res) => {
-  const { id } = req.params;
-  const { rating } = req.body;
-
-  if (!rating || rating < 1 || rating > 10) {
-    return res.status(400).json({ message: 'Rating must be between 1 and 10' });
-  }
-
-  try {
-    const updateVoteQuery = `
-      UPDATE votes
-      SET rating = $1
-      WHERE id = $2
-      RETURNING *;
-    `;
-    const result = await pool.query(updateVoteQuery, [rating, id]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Vote not found' });
-    }
-
-    res.status(200).json({ message: 'Vote updated successfully', vote: result.rows[0] });
-  } catch (error) {
-    console.error('Error updating vote:', error);
-    res.status(500).json({ message: 'Failed to update vote' });
-  }
-});
-
-
 module.exports = router;
