@@ -1,42 +1,16 @@
 const path = require("path");
-const os = require("os");
-const fs = require("fs");
-const { exec } = require("child_process");
+const { execSync } = require("child_process");
 const dockerCompose = require("docker-compose");
-const { drizzle } = require("drizzle-orm/node-postgres");
-const { migrate } = require("drizzle-orm/node-postgres/migrator");
 const chalk = require("../../devUtils/chalk");
 
+const testsRootPath = path.join(__dirname, "../");
+console.log(testsRootPath);
 const dockerComposeOptions = {
-    cwd: path.join(__dirname, "../"),
+    cwd: testsRootPath,
 };
-const drizzlePath = path.join(__dirname, "../../../drizzle");
-try {
-    var isDrizzlePath =
-        fs.existsSync(drizzlePath) && fs.statSync(drizzlePath).isDirectory();
-} catch (err) {
-    console.error(err);
-    var isDrizzlePath = false;
-}
 
 const setupDb = async (pool) => {
-    const db = drizzle(pool);
     console.log("\n" + chalk("Start to set up the test database...", "blink"));
-    //Prepare the migrations folder.
-    await new Promise((resolve, reject) => {
-        exec("npx drizzle-kit generate", (error, _, stderr) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            if (stderr) {
-                reject(new Error(stderr));
-                return;
-            }
-            resolve();
-        });
-    });
-    //Spin up the dockerized database.
     await dockerCompose
         .upAll(dockerComposeOptions)
         .then((res) => {
@@ -48,18 +22,17 @@ const setupDb = async (pool) => {
         });
     await getPoolReady();
     console.log(chalk("Running database migrations...", "blink"));
-    await migrate(db, {
-        migrationsFolder: drizzlePath,
-    });
+    execSync(`npx drizzle-kit push`, { cwd: testsRootPath });
     console.log(chalk("Migrations completed successfully!", "brightGreen"));
     console.log(
         chalk(`Tests start at ${new Date().toString()}`, "brightWhite")
     );
     function getPoolReady() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             console.log(
                 chalk("The database system is starting up...", "blink")
             );
+            let retryCount = 0;
             const interval = setInterval(async () => {
                 try {
                     const results = await pool.query("SELECT NOW()");
@@ -71,35 +44,19 @@ const setupDb = async (pool) => {
                     );
                     clearInterval(interval);
                     resolve(results);
-                } catch (err) {}
+                } catch (err) {
+                    retryCount++;
+                    if (retryCount > 20) {
+                        clearInterval(interval);
+                        reject(err);
+                    }
+                }
             }, 500);
         });
     }
 };
 
 const teardownDb = async (pool) => {
-    //Remove the migrations folder if it was not preexisting.
-    if (isDrizzlePath !== true) {
-        const command =
-            (os.platform() === "win32" ? "rmdir /s /q " : "rm -rf ") +
-            drizzlePath;
-        exec(command, (error, _, stderr) => {
-            if (error || stderr)
-                console.warn(
-                    "Failed to delete the Drizzle files. Please delete them manually."
-                );
-            if (error) {
-                console.error(`Execution error: ${error}`);
-                return;
-            }
-            if (stderr) {
-                console.error(`Stderr: ${stderr}`);
-                return;
-            }
-            console.log(chalk(`Deleted the Drizzle files.`, "dim"));
-        });
-    }
-    //Tear down the test database.
     try {
         var results = await pool.query("SELECT NOW()");
         await pool.end();
