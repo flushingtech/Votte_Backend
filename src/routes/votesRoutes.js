@@ -63,20 +63,36 @@ router.get('/idea/:idea_id', async (req, res) => {
   }
 });
 
-// Get all votes by a user
-router.get('/user/:user_email', async (req, res) => {
-  const { user_email } = req.params;
-
-  try {
-    const fetchUserVotesQuery = `
-      SELECT * FROM votes WHERE user_email = $1;
-    `;
-    const result = await pool.query(fetchUserVotesQuery, [user_email]);
-    res.status(200).json({ votes: result.rows });
-  } catch (error) {
-    console.error('Error fetching user votes:', error);
-    res.status(500).json({ message: 'Failed to fetch user votes' });
-  }
-});
-
+// Update average scores for each idea in Stage 3
+router.put('/update-average-scores', async (req, res) => {
+    try {
+      console.log('Calculating average scores for all ideas...');
+  
+      // Step 1: Calculate average rating for each idea
+      const averageScoreQuery = `
+        SELECT idea_id, AVG(rating) AS average_score
+        FROM votes
+        GROUP BY idea_id;
+      `;
+  
+      const { rows: averageScores } = await pool.query(averageScoreQuery);
+      console.log('Average scores calculated:', averageScores);
+  
+      // Step 2: Update the average_score in the ideas table
+      for (const { idea_id, average_score } of averageScores) {
+        const updateScoreQuery = `
+          UPDATE ideas
+          SET average_score = $1, updated_at = NOW()
+          WHERE id = $2;
+        `;
+        await pool.query(updateScoreQuery, [average_score, idea_id]);
+      }
+  
+      res.status(200).json({ message: 'Average scores updated successfully.' });
+    } catch (error) {
+      console.error('Error updating average scores:', error.message);
+      res.status(500).json({ message: 'Failed to update average scores.', error: error.message });
+    }
+  });
+  
 module.exports = router;
