@@ -197,6 +197,35 @@ router.get('/get-stage/:id', async (req, res) => {
       res.status(500).json({ message: 'Failed to fetch event stage' });
     }
   });
+
+  // PUT endpoint to transition an event to Results Time (stage 3)
+router.put('/set-results-time/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // Update the stage of the event to 3
+        const updateQuery = `
+            UPDATE events
+            SET stage = 3
+            WHERE id = $1
+            RETURNING *;
+        `;
+        const result = await pool.query(updateQuery, [id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+
+        res.status(200).json({
+            message: `Event "${result.rows[0].title}" transitioned to Results Time (stage 3).`,
+            event: result.rows[0],
+        });
+    } catch (error) {
+        console.error('Error transitioning to Results Time:', error);
+        res.status(500).json({ message: 'Failed to transition to Results Time', error: error.message });
+    }
+});
+
   
 
 
