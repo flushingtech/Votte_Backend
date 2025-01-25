@@ -36,22 +36,36 @@ async function fetchRssAndAddEvents() {
         console.log("Fetching RSS feed...");
         const rssResponse = await axios.get(rssUrl);
         const rssData = rssResponse.data;
+
         // Parse RSS XML data
         const parsedResult = await parseStringPromise(rssData);
         const rssItems = parsedResult.rss.channel[0].item;
 
         for (const item of rssItems) {
+            if (!item.description || !item.description[0]) {
+                console.error("Missing description for item:", item);
+                continue; // Skip items with missing descriptions
+            }
+
             const originalTitle = item.title[0];
             const eventTitle =
                 titleCorrespondence[originalTitle] || originalTitle;
-            const eventDate = getEventDate(item.description[0]);
+
+            let eventDate;
+            try {
+                eventDate = getEventDate(item.description[0]);
+            } catch (err) {
+                console.error(`Error extracting date for event "${originalTitle}":`, err.message);
+                continue; // Skip this event if date extraction fails
+            }
 
             console.log(`Checking event: ${eventTitle} on ${eventDate}`);
 
             if (eventTitle.toLowerCase().includes("happy hour")) {
                 console.log(`Skipping Happy Hour event: ${eventTitle}`);
                 continue; // Skip this iteration
-            }          
+            }
+
             // Check if event already exists in the database
             const checkEventQuery =
                 "SELECT * FROM events WHERE title = $1 AND event_date = $2";
@@ -64,7 +78,7 @@ async function fetchRssAndAddEvents() {
                 // Add event if it doesn't exist
                 await pool.query(
                     "INSERT INTO events (title, event_date) VALUES ($1, $2)",
-                    [eventTitle, eventDate],
+                    [eventTitle, eventDate]
                 );
                 console.log(`Inserted new event: ${eventTitle}`);
             } else {
@@ -73,10 +87,11 @@ async function fetchRssAndAddEvents() {
         }
         console.log("Finished processing RSS events.");
     } catch (error) {
-        console.error("Error fetching or adding RSS events:", error);
+        console.error("Error fetching or adding RSS events:", error.message);
         throw new Error("Error fetching or adding RSS events");
     }
 }
+
 // Ensure this function runs when `/all-events` is called
 router.get("/all-events", async (req, res) => {
     try {
@@ -85,11 +100,11 @@ router.get("/all-events", async (req, res) => {
 
         // Then, retrieve events from the database
         const dbEvents = await pool.query(
-            "SELECT * FROM events ORDER BY event_date ASC",
+            "SELECT * FROM events ORDER BY event_date ASC"
         );
         res.json({ events: dbEvents.rows });
     } catch (error) {
-        console.error("Error fetching events:", error);
+        console.error("Error fetching events:", error.message);
         res.status(500).json({ message: "Error fetching events" });
     }
 });
@@ -111,7 +126,7 @@ router.post("/add-event", async (req, res) => {
         );
         res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error("Error adding event:", error);
+        console.error("Error adding event:", error.message);
         res.status(500).json({ message: "Error adding event" });
     }
 });
@@ -132,7 +147,7 @@ router.delete("/delete-event/:id", async (req, res) => {
             event: result.rows[0],
         });
     } catch (error) {
-        console.error("Error deleting event:", error);
+        console.error("Error deleting event:", error.message);
         res.status(500).json({ message: "Failed to delete event" });
     }
 });
@@ -147,7 +162,7 @@ router.get("/:eventId/ideas", async (req, res) => {
         );
         res.status(200).json({ ideas: result.rows });
     } catch (error) {
-        console.error("Error fetching ideas for event:", error);
+        console.error("Error fetching ideas for event:", error.message);
         res.status(500).json({ message: "Failed to fetch ideas for event" });
     }
 });
@@ -225,8 +240,6 @@ router.put('/set-results-time/:id', async (req, res) => {
         res.status(500).json({ message: 'Failed to transition to Results Time', error: error.message });
     }
 });
-
-  
 
 
 module.exports = router;

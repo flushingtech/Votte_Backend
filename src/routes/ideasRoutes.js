@@ -95,21 +95,27 @@ router.delete('/delete-idea/:id', async (req, res) => {
   const { id } = req.params;
   const { email } = req.body;
 
-  console.log('Admin email for deletion:', email);
+  console.log('User attempting deletion:', email);
 
   try {
+    // Check if the idea exists and fetch the owner's email
+    const ideaResult = await pool.query('SELECT user_email FROM ideas WHERE id = $1', [id]);
+    if (ideaResult.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+    const ideaOwnerEmail = ideaResult.rows[0].user_email;
+
     // Check if the email belongs to an admin
     const adminResult = await pool.query('SELECT email FROM admin WHERE email = $1', [email]);
-    if (adminResult.rowCount === 0) {
-      return res.status(403).json({ message: 'Unauthorized: Only admins can delete ideas' });
+    const isAdmin = adminResult.rowCount > 0;
+
+    // Check if the user is either the owner or an admin
+    if (email !== ideaOwnerEmail && !isAdmin) {
+      return res.status(403).json({ message: 'Unauthorized: Only the owner or admins can delete this idea' });
     }
 
     // Proceed to delete the idea
     const result = await pool.query('DELETE FROM ideas WHERE id = $1 RETURNING *', [id]);
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Idea not found' });
-    }
-
     res.json({ message: 'Idea deleted successfully', idea: result.rows[0] });
   } catch (error) {
     console.error('Error deleting idea:', error);
