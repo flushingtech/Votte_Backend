@@ -23,6 +23,7 @@ export const events = pgTable("events", {
   ),
   stage: integer().default(1),
   eventTime: time(),
+  link: text(),
 });
 
 export const ideas = pgTable(
