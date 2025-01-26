@@ -4,6 +4,7 @@ const { parseStringPromise } = require("xml2js"); // Use the promise version of 
 const pool = require("../../db");
 const router = express.Router();
 const { getEventDate } = require("../utils/dateTimeUtils");
+const e = require("express");
 
 // Check if a user is an admin
 router.post("/check-admin", async (req, res) => {
@@ -11,7 +12,7 @@ router.post("/check-admin", async (req, res) => {
     try {
         const result = await pool.query(
             "SELECT email FROM admin WHERE email = $1",
-            [email],
+            [email]
         );
         res.json({ isAdmin: result.rowCount > 0 });
     } catch (error) {
@@ -42,9 +43,14 @@ async function fetchRssAndAddEvents() {
         const rssItems = parsedResult.rss.channel[0].item;
 
         for (const item of rssItems) {
-            if (!item.description || !item.description[0]) {
-                console.error("Missing description for item:", item);
-                continue; // Skip items with missing descriptions
+            if (!item.link || !item.link[0]) {
+                console.error("Missing link for item:", item);
+                continue; // Skip items with missing link
+            }
+            const link = item.link[0];
+            // Skip this iteration if event is already in the database
+            if (await isEventInDatabase(link)) {
+                continue;
             }
 
             const originalTitle = item.title[0];
@@ -53,42 +59,53 @@ async function fetchRssAndAddEvents() {
 
             let eventDate;
             try {
-                eventDate = getEventDate(item.description[0]);
+                eventDate = await getEventDate(link);
             } catch (err) {
-                console.error(`Error extracting date for event "${originalTitle}":`, err.message);
+                console.error(
+                    `Error extracting date for event "${originalTitle}":`,
+                    err.message
+                );
                 continue; // Skip this event if date extraction fails
             }
 
-            console.log(`Checking event: ${eventTitle} on ${eventDate}`);
-
             if (eventTitle.toLowerCase().includes("happy hour")) {
-                console.log(`Skipping Happy Hour event: ${eventTitle}`);
                 continue; // Skip this iteration
             }
 
-            // Check if event already exists in the database
-            const checkEventQuery =
-                "SELECT * FROM events WHERE title = $1 AND event_date = $2";
-            const result = await pool.query(checkEventQuery, [
-                eventTitle,
-                eventDate,
-            ]);
-
-            if (result.rowCount === 0) {
-                // Add event if it doesn't exist
-                await pool.query(
-                    "INSERT INTO events (title, event_date) VALUES ($1, $2)",
-                    [eventTitle, eventDate]
+            if (await isEventTileDateInDatabase(eventTitle, eventDate)) {
+                //Insert the link to the database
+                const results = await pool.query(
+                    "UPDATE events SET link = $1 WHERE event_date = $2 AND link IS NULL",
+                    [link, eventDate]
                 );
-                console.log(`Inserted new event: ${eventTitle}`);
+                console.log(
+                    `Update event link for ${eventTitle} on ${eventDate} with ${link}.`
+                );
             } else {
-                console.log(`Event already exists: ${eventTitle}`);
+                // Add event to the database
+                await pool.query(
+                    "INSERT INTO events (title, event_date, link) VALUES ($1, $2, $3)",
+                    [eventTitle, eventDate, link]
+                );
+                console.log(
+                    `Inserted new event: ${eventTitle} on ${eventDate}`
+                );
             }
         }
         console.log("Finished processing RSS events.");
     } catch (error) {
         console.error("Error fetching or adding RSS events:", error.message);
         throw new Error("Error fetching or adding RSS events");
+    }
+    async function isEventInDatabase(link) {
+        const query = "SELECT * FROM events WHERE link = $1";
+        const result = await pool.query(query, [link]);
+        return result.rowCount > 0;
+    }
+    async function isEventTileDateInDatabase(eventTitle, eventDate) {
+        const query = `SELECT * FROM events WHERE event_date = $1 AND title = $2`;
+        const result = await pool.query(query, [eventDate, eventTitle]);
+        return result.rowCount > 0;
     }
 }
 
@@ -115,14 +132,14 @@ router.post("/add-event", async (req, res) => {
     try {
         const adminResult = await pool.query(
             "SELECT email FROM admin WHERE email = $1",
-            [email],
+            [email]
         );
         if (adminResult.rowCount === 0) {
             return res.status(403).json({ message: "Unauthorized" });
         }
         const result = await pool.query(
             "INSERT INTO events (title, event_date) VALUES ($1, $2) RETURNING *",
-            [title, eventDate],
+            [title, eventDate]
         );
         res.status(201).json(result.rows[0]);
     } catch (error) {
@@ -137,7 +154,7 @@ router.delete("/delete-event/:id", async (req, res) => {
     try {
         const result = await pool.query(
             "DELETE FROM events WHERE id = $1 RETURNING *",
-            [id],
+            [id]
         );
         if (result.rowCount === 0) {
             return res.status(404).json({ message: "Event not found" });
@@ -158,7 +175,7 @@ router.get("/:eventId/ideas", async (req, res) => {
     try {
         const result = await pool.query(
             "SELECT * FROM ideas WHERE event_id = $1 ORDER BY created_at DESC",
-            [eventId],
+            [eventId]
         );
         res.status(200).json({ ideas: result.rows });
     } catch (error) {
@@ -168,7 +185,7 @@ router.get("/:eventId/ideas", async (req, res) => {
 });
 
 // PUT endpoint to set the stage of an event
-router.put('/set-stage/:id', async (req, res) => {
+router.put("/set-stage/:id", async (req, res) => {
     const { id } = req.params;
     const { stage } = req.body;
 
@@ -182,39 +199,45 @@ router.put('/set-stage/:id', async (req, res) => {
         const result = await pool.query(updateQuery, [stage, id]);
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Event not found' });
+            return res.status(404).json({ message: "Event not found" });
         }
 
         res.status(200).json({
-            message: 'Event stage updated successfully!',
+            message: "Event stage updated successfully!",
             event: result.rows[0],
         });
     } catch (error) {
-        console.error('Error setting event stage:', error);
-        res.status(500).json({ message: 'Failed to set event stage', error: error.message });
+        console.error("Error setting event stage:", error);
+        res.status(500).json({
+            message: "Failed to set event stage",
+            error: error.message,
+        });
     }
 });
 
 // GET endpoint to fetch the stage of an event
-router.get('/get-stage/:id', async (req, res) => {
+router.get("/get-stage/:id", async (req, res) => {
     const { id } = req.params;
-  
-    try {
-      const result = await pool.query('SELECT stage FROM events WHERE id = $1', [id]);
-  
-      if (result.rowCount === 0) {
-        return res.status(404).json({ message: 'Event not found' });
-      }
-  
-      res.status(200).json({ stage: result.rows[0].stage });
-    } catch (error) {
-      console.error('Error fetching event stage:', error);
-      res.status(500).json({ message: 'Failed to fetch event stage' });
-    }
-  });
 
-  // PUT endpoint to transition an event to Results Time (stage 3)
-router.put('/set-results-time/:id', async (req, res) => {
+    try {
+        const result = await pool.query(
+            "SELECT stage FROM events WHERE id = $1",
+            [id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+
+        res.status(200).json({ stage: result.rows[0].stage });
+    } catch (error) {
+        console.error("Error fetching event stage:", error);
+        res.status(500).json({ message: "Failed to fetch event stage" });
+    }
+});
+
+// PUT endpoint to transition an event to Results Time (stage 3)
+router.put("/set-results-time/:id", async (req, res) => {
     const { id } = req.params;
 
     try {
@@ -228,7 +251,7 @@ router.put('/set-results-time/:id', async (req, res) => {
         const result = await pool.query(updateQuery, [id]);
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Event not found' });
+            return res.status(404).json({ message: "Event not found" });
         }
 
         res.status(200).json({
@@ -236,10 +259,12 @@ router.put('/set-results-time/:id', async (req, res) => {
             event: result.rows[0],
         });
     } catch (error) {
-        console.error('Error transitioning to Results Time:', error);
-        res.status(500).json({ message: 'Failed to transition to Results Time', error: error.message });
+        console.error("Error transitioning to Results Time:", error);
+        res.status(500).json({
+            message: "Failed to transition to Results Time",
+            error: error.message,
+        });
     }
 });
-
 
 module.exports = router;
