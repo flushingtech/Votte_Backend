@@ -299,4 +299,23 @@ router.put('/set-stage/:id', async (req, res) => {
   }
 });
 
+// GET endpoint to fetch a single idea by ID
+router.get('/idea/:ideaId', async (req, res) => {
+  const { ideaId } = req.params;
+
+  try {
+    const query = 'SELECT * FROM ideas WHERE id = $1';
+    const result = await pool.query(query, [ideaId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+
+    res.status(200).json({ idea: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching idea details:', error);
+    res.status(500).json({ message: 'Failed to fetch idea details' });
+  }
+});
+
 module.exports = router;
