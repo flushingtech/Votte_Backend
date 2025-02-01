@@ -125,21 +125,12 @@ router.delete('/delete-idea/:id', async (req, res) => {
 
 
 
-// POST endpoint to like an idea
 router.post('/like/:id', async (req, res) => {
   const { id } = req.params;
   const { email } = req.body;
-  const MAX_LIKES_PER_USER = 3;
 
   try {
-    const likeCountQuery = 'SELECT COUNT(*) FROM likes WHERE user_email = $1';
-    const likeCountResult = await pool.query(likeCountQuery, [email]);
-    const totalLikes = parseInt(likeCountResult.rows[0].count, 10);
-
-    if (totalLikes >= MAX_LIKES_PER_USER) {
-      return res.status(400).json({ message: `You can only like up to ${MAX_LIKES_PER_USER} times.` });
-    }
-
+    // Check if the user has already liked this idea
     const existingLikeQuery = 'SELECT * FROM likes WHERE user_email = $1 AND idea_id = $2';
     const existingLikeResult = await pool.query(existingLikeQuery, [email, id]);
 
@@ -147,9 +138,11 @@ router.post('/like/:id', async (req, res) => {
       return res.status(400).json({ message: 'You have already liked this idea.' });
     }
 
+    // Update likes count in 'ideas' table
     const likeUpdateQuery = 'UPDATE ideas SET likes = likes + 1 WHERE id = $1 RETURNING *';
     const likeResult = await pool.query(likeUpdateQuery, [id]);
 
+    // Insert like into 'likes' table
     const insertLikeQuery = 'INSERT INTO likes (user_email, idea_id) VALUES ($1, $2)';
     await pool.query(insertLikeQuery, [email, id]);
 
@@ -157,13 +150,14 @@ router.post('/like/:id', async (req, res) => {
 
     res.status(200).json({
       message: 'Like recorded successfully!',
-      idea: likeResult.rows[0]
+      idea: likeResult.rows[0],
     });
   } catch (error) {
     console.error('Error while liking:', error);
     res.status(500).json({ message: 'Failed to record like', error: error.message });
   }
 });
+
 
 // POST endpoint to unlike an idea
 router.post('/unlike/:id', async (req, res) => {
