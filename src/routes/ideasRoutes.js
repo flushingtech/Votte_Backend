@@ -10,20 +10,23 @@ router.post('/submitIdea', async (req, res) => {
   console.log('Received idea submission:', { email, idea, description, technologies, event_id, is_built });
 
   try {
+    // Check if event exists
     const eventCheckQuery = 'SELECT * FROM events WHERE id = $1';
     const eventCheckResult = await pool.query(eventCheckQuery, [event_id]);
     if (eventCheckResult.rowCount === 0) {
       return res.status(400).json({ message: 'Invalid event ID' });
     }
 
-    const ideasCountQuery = 'SELECT COUNT(*) FROM ideas WHERE email = $1';
-    const ideasCountResult = await pool.query(ideasCountQuery, [email]);
+    // Count user's ideas for THIS specific event
+    const ideasCountQuery = 'SELECT COUNT(*) FROM ideas WHERE email = $1 AND event_id = $2';
+    const ideasCountResult = await pool.query(ideasCountQuery, [email, event_id]);
     const ideasCount = parseInt(ideasCountResult.rows[0].count, 10);
 
     if (ideasCount >= MAX_IDEAS_PER_USER) {
-      return res.status(400).json({ message: `You can only submit up to ${MAX_IDEAS_PER_USER} ideas.` });
+      return res.status(400).json({ message: `You can only submit up to ${MAX_IDEAS_PER_USER} ideas per event.` });
     }
 
+    // Insert new idea
     const insertQuery = `
       INSERT INTO ideas (email, idea, description, technologies, event_id, is_built)
       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
@@ -41,6 +44,7 @@ router.post('/submitIdea', async (req, res) => {
     res.status(500).json({ message: 'Failed to submit idea', error: error.message });
   }
 });
+
 
 router.get('/allIdeas', async (req, res) => {
   try {
