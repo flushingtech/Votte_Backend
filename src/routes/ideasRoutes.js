@@ -97,17 +97,17 @@ router.put('/editIdea/:id', async (req, res) => {
 
 router.delete('/delete-idea/:id', async (req, res) => {
   const { id } = req.params;
-  const { email } = req.body;
+  const { email } = req.query; // Get email from query params
 
   console.log('User attempting deletion:', email);
 
   try {
     // Check if the idea exists and fetch the owner's email
-    const ideaResult = await pool.query('SELECT user_email FROM ideas WHERE id = $1', [id]);
+    const ideaResult = await pool.query('SELECT email FROM ideas WHERE id = $1', [id]); // Fix column name
     if (ideaResult.rowCount === 0) {
       return res.status(404).json({ message: 'Idea not found' });
     }
-    const ideaOwnerEmail = ideaResult.rows[0].user_email;
+    const ideaOwnerEmail = ideaResult.rows[0].email;
 
     // Check if the email belongs to an admin
     const adminResult = await pool.query('SELECT email FROM admin WHERE email = $1', [email]);
@@ -126,6 +126,7 @@ router.delete('/delete-idea/:id', async (req, res) => {
     res.status(500).json({ message: 'Failed to delete idea', error: error.message });
   }
 });
+
 
 
 
