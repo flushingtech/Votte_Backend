@@ -73,7 +73,7 @@ router.put('/editIdea/:id', async (req, res) => {
   try {
     const updateQuery = `
       UPDATE ideas
-      SET idea = $1, description = $2, technologies = $3, updatedAt = CURRENT_TIMESTAMP
+      SET idea = $1, description = $2, technologies = $3, updated_at = CURRENT_TIMESTAMP
       WHERE id = $4
       RETURNING *;
     `;
