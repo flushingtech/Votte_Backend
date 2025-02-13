@@ -94,5 +94,64 @@ router.put('/update-average-scores', async (req, res) => {
       res.status(500).json({ message: 'Failed to update average scores.', error: error.message });
     }
   });
+
+  // POST endpoint for voting Most Creative Idea
+router.post("/most-creative/vote", async (req, res) => {
+  const { user_email, idea_id, event_id } = req.body;
+
+  if (!user_email || !idea_id || !event_id) {
+      return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  try {
+      // Upsert the vote (insert or update)
+      const result = await pool.query(
+          `INSERT INTO most_creative (user_email, idea_id, event_id) 
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_email, event_id) 
+           DO UPDATE SET idea_id = EXCLUDED.idea_id
+           RETURNING *`,
+          [user_email, idea_id, event_id]
+      );
+
+      res.status(200).json({
+          message: "Vote recorded successfully!",
+          vote: result.rows[0],
+      });
+  } catch (error) {
+      console.error("Error submitting Most Creative vote:", error);
+      res.status(500).json({ message: "Failed to submit vote" });
+  }
+});
+
+// GET endpoint to fetch the Most Creative Idea for an event
+router.get("/most-creative/:event_id", async (req, res) => {
+  const { event_id } = req.params;
+
+  try {
+      const result = await pool.query(
+          `SELECT idea_id, COUNT(*) AS votes
+           FROM most_creative
+           WHERE event_id = $1
+           GROUP BY idea_id
+           ORDER BY votes DESC
+           LIMIT 1`, 
+          [event_id]
+      );
+
+      if (result.rowCount === 0) {
+          return res.status(404).json({ message: "No votes yet for this event" });
+      }
+
+      res.status(200).json({
+          message: "Most Creative Idea found!",
+          most_creative_idea: result.rows[0],
+      });
+  } catch (error) {
+      console.error("Error fetching Most Creative Idea:", error);
+      res.status(500).json({ message: "Failed to fetch Most Creative Idea" });
+  }
+});
+
   
 module.exports = router;
