@@ -96,33 +96,33 @@ router.put('/update-average-scores', async (req, res) => {
   });
 
   // POST endpoint for voting Most Creative Idea
-router.post("/most-creative/vote", async (req, res) => {
-  const { user_email, idea_id, event_id } = req.body;
-
-  if (!user_email || !idea_id || !event_id) {
-      return res.status(400).json({ message: "Missing required fields" });
-  }
-
-  try {
+  router.post('/most-creative/vote', async (req, res) => {
+    const { user_email, idea_id, event_id } = req.body;
+  
+    if (!user_email || !idea_id || !event_id) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+  
+    try {
       // Upsert the vote (insert or update)
       const result = await pool.query(
-          `INSERT INTO most_creative (user_email, idea_id, event_id) 
-           VALUES ($1, $2, $3)
-           ON CONFLICT (user_email, event_id) 
-           DO UPDATE SET idea_id = EXCLUDED.idea_id
-           RETURNING *`,
-          [user_email, idea_id, event_id]
+        `INSERT INTO most_creative (user_email, idea_id, event_id) 
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_email, event_id) 
+         DO UPDATE SET idea_id = EXCLUDED.idea_id
+         RETURNING *`,
+        [user_email, idea_id, event_id]
       );
-
+  
       res.status(200).json({
-          message: "Vote recorded successfully!",
-          vote: result.rows[0],
+        message: 'Vote recorded successfully!',
+        vote: result.rows[0],
       });
-  } catch (error) {
-      console.error("Error submitting Most Creative vote:", error);
-      res.status(500).json({ message: "Failed to submit vote" });
-  }
-});
+    } catch (error) {
+      console.error('Error submitting Most Creative vote:', error);
+      res.status(500).json({ message: 'Failed to submit vote' });
+    }
+  });
 
 // GET endpoint to fetch the Most Creative Idea for an event
 router.get("/most-creative/:event_id", async (req, res) => {
@@ -152,6 +152,61 @@ router.get("/most-creative/:event_id", async (req, res) => {
       res.status(500).json({ message: "Failed to fetch Most Creative Idea" });
   }
 });
+
+// DELETE endpoint to remove Most Creative vote
+router.delete('/most-creative/unvote', async (req, res) => {
+  const { user_email, event_id } = req.body;
+
+  if (!user_email || !event_id) {
+      return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  try {
+      const deleteQuery = `DELETE FROM most_creative WHERE user_email = $1 AND event_id = $2 RETURNING *;`;
+      const result = await pool.query(deleteQuery, [user_email, event_id]);
+
+      if (result.rowCount === 0) {
+          return res.status(404).json({ message: 'Vote not found' });
+      }
+
+      res.status(200).json({ message: 'Vote removed successfully', removedVote: result.rows[0] });
+  } catch (error) {
+      console.error('Error removing vote:', error);
+      res.status(500).json({ message: 'Failed to remove vote' });
+  }
+});
+
+// GET endpoint to check if the user has already voted for Most Creative
+router.get('/most-creative/user-vote', async (req, res) => {
+    const { user_email, event_id } = req.query;  // ✅ Use query parameters
+
+    console.log("Fetching user vote for:", { user_email, event_id });
+
+    if (!user_email || !event_id) {
+        console.error("Missing required fields:", { user_email, event_id });
+        return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT idea_id FROM most_creative WHERE user_email = $1 AND event_id = $2`,
+            [user_email, event_id]
+        );
+
+        console.log("Query result:", result.rows);
+
+        if (result.rowCount === 0) {
+            return res.status(200).json({ userVote: null }); // No vote found
+        }
+
+        res.status(200).json({ userVote: result.rows[0].idea_id });
+    } catch (error) {
+        console.error('Error fetching user vote:', error.message);
+        res.status(500).json({ message: 'Failed to fetch user vote', error: error.message });
+    }
+});
+
+
 
   
 module.exports = router;
