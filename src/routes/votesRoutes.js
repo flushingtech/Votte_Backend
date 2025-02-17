@@ -166,5 +166,125 @@ router.put('/update-average-scores', async (req, res) => {
     }
   });
 
+// Function to determine and store winners in the results table
+const determineWinners = async (event_id) => {
+  try {
+    console.log(`Determining winners for event ${event_id}...`);
+
+    const categories = ["Most Creative", "Most Technical", "Most Impactful"];
+
+    for (const category of categories) {
+      const winnerQuery = `
+        SELECT idea_id, COUNT(*) AS votes
+        FROM votes
+        WHERE event_id = $1 AND vote_type = $2
+        GROUP BY idea_id
+        ORDER BY votes DESC
+        LIMIT 1;
+      `;
+
+      const { rows } = await pool.query(winnerQuery, [event_id, category]);
+
+      if (rows.length === 0) {
+        console.log(`No votes found for ${category}`);
+        continue;
+      }
+
+      const { idea_id, votes } = rows[0];
+
+      const upsertQuery = `
+        INSERT INTO results (event_id, category, winning_idea_id, votes)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (event_id, category)
+        DO UPDATE SET winning_idea_id = $3, votes = $4, created_at = NOW();
+      `;
+
+      await pool.query(upsertQuery, [event_id, category, idea_id, votes]);
+
+      console.log(`Winner for ${category}: Idea ${idea_id} with ${votes} votes.`);
+    }
+
+    // Determine Best Overall Winner
+    const bestOverallQuery = `
+      SELECT idea_id, COUNT(*) AS total_votes
+      FROM votes
+      WHERE event_id = $1
+      GROUP BY idea_id
+      ORDER BY total_votes DESC
+      LIMIT 1;
+    `;
+
+    const { rows: bestOverallRows } = await pool.query(bestOverallQuery, [event_id]);
+
+    if (bestOverallRows.length > 0) {
+      const { idea_id, total_votes } = bestOverallRows[0];
+
+      const bestOverallInsertQuery = `
+        INSERT INTO results (event_id, category, winning_idea_id, votes)
+        VALUES ($1, 'Best Overall', $2, $3)
+        ON CONFLICT (event_id, category)
+        DO UPDATE SET winning_idea_id = $2, votes = $3, created_at = NOW();
+      `;
+
+      await pool.query(bestOverallInsertQuery, [event_id, idea_id, total_votes]);
+
+      console.log(`Best Overall Winner: Idea ${idea_id} with ${total_votes} votes.`);
+    }
+
+    console.log(`Winners determined successfully for event ${event_id}.`);
+    return { message: "Winners determined successfully." };
+
+  } catch (error) {
+    console.error("Error determining winners:", error);
+    throw error;
+  }
+};
+
+
+  router.post('/determine-winners', async (req, res) => {
+    const { event_id } = req.body;
+
+    if (!event_id) {
+        return res.status(400).json({ message: 'Missing event_id' });
+    }
+
+    try {
+        const result = await determineWinners(event_id);
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to determine winners.', error: error.message });
+    }
+});
+
+router.get('/results', async (req, res) => {
+  const { event_id } = req.query;
+
+  if (!event_id) {
+    return res.status(400).json({ message: 'Missing event_id' });
+  }
+
+  try {
+    const resultQuery = `
+      SELECT 
+        r.category,
+        r.winning_idea_id,
+        r.votes,
+        i.idea AS idea_title,
+        i.description AS idea_description
+      FROM results r
+      JOIN ideas i ON r.winning_idea_id = i.id
+      WHERE r.event_id = $1;
+    `;
+
+    const { rows } = await pool.query(resultQuery, [event_id]);
+
+    res.status(200).json({ results: rows });
+  } catch (error) {
+    console.error('Error fetching results:', error);
+    res.status(500).json({ message: 'Failed to fetch results.' });
+  }
+});
+
+
   
 module.exports = router;
