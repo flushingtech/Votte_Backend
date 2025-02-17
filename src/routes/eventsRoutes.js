@@ -184,36 +184,36 @@ router.get("/:eventId/ideas", async (req, res) => {
     }
 });
 
-// PUT endpoint to set the stage of an event
+// PUT endpoint to set the stage of an event and sub-stage
 router.put("/set-stage/:id", async (req, res) => {
     const { id } = req.params;
     const { stage } = req.body;
 
+    let sub_stage = null;
+    if (stage === 2) {
+        sub_stage = 1; // Default sub-stage for Stage 2 is 1 (Most Creative)
+    }
+
     try {
-        const updateQuery = `
-            UPDATE events
-            SET stage = $1
-            WHERE id = $2
-            RETURNING *;
-        `;
-        const result = await pool.query(updateQuery, [stage, id]);
+        const result = await pool.query(
+            "UPDATE events SET stage = $1, current_sub_stage = COALESCE($2, current_sub_stage) WHERE id = $3 RETURNING *",
+            [stage, sub_stage, id]
+        );
 
         if (result.rowCount === 0) {
             return res.status(404).json({ message: "Event not found" });
         }
 
         res.status(200).json({
-            message: "Event stage updated successfully!",
+            message: `Event stage updated to ${stage}, sub-stage ${sub_stage}`,
             event: result.rows[0],
         });
     } catch (error) {
         console.error("Error setting event stage:", error);
-        res.status(500).json({
-            message: "Failed to set event stage",
-            error: error.message,
-        });
+        res.status(500).json({ message: "Failed to set event stage" });
     }
 });
+
 
 // GET endpoint to fetch the stage of an event
 router.get("/get-stage/:id", async (req, res) => {
@@ -221,7 +221,7 @@ router.get("/get-stage/:id", async (req, res) => {
 
     try {
         const result = await pool.query(
-            "SELECT stage FROM events WHERE id = $1",
+            "SELECT stage, current_sub_stage FROM events WHERE id = $1",
             [id]
         );
 
@@ -229,12 +229,16 @@ router.get("/get-stage/:id", async (req, res) => {
             return res.status(404).json({ message: "Event not found" });
         }
 
-        res.status(200).json({ stage: result.rows[0].stage });
+        res.status(200).json({ 
+            stage: result.rows[0].stage,
+            current_sub_stage: result.rows[0].current_sub_stage
+        });
     } catch (error) {
         console.error("Error fetching event stage:", error);
         res.status(500).json({ message: "Failed to fetch event stage" });
     }
 });
+
 
 // PUT endpoint to transition an event to Results Time (stage 3)
 router.put("/set-results-time/:id", async (req, res) => {
@@ -266,5 +270,36 @@ router.put("/set-results-time/:id", async (req, res) => {
         });
     }
 });
+
+// PUT endpoint to update the sub-stage of an event
+router.put("/set-sub-stage/:id", async (req, res) => {
+    const { id } = req.params;
+    const { sub_stage } = req.body; // Accept the new sub-stage value
+
+    try {
+        const updateQuery = `
+            UPDATE events
+            SET current_sub_stage = $1
+            WHERE id = $2
+            RETURNING *;
+        `;
+        const result = await pool.query(updateQuery, [sub_stage, id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+
+        console.log(`Sub-stage updated successfully:`, result.rows[0]);
+
+        res.status(200).json({
+            message: "Sub-stage updated successfully!",
+            event: result.rows[0],
+        });
+    } catch (error) {
+        console.error("Error updating sub-stage:", error);
+        res.status(500).json({ message: "Failed to update sub-stage", error: error.message });
+    }
+});
+
 
 module.exports = router;
