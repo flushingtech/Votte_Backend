@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "mkdir -p /vercel/path0/public && touch /vercel/path0/public/placeholder && npm run db",
+  "buildCommand": "mkdir -p /vercel/path0/public && touch /vercel/path0/public/placeholder && npm run db:ci",
   "functions": {
     "api/index.js": {
       "memory": 1024,
