@@ -85,7 +85,7 @@ export const votes = pgTable(
     userEmail: varchar("user_email", { length: 255 }).notNull(),
     ideaId: integer("idea_id").notNull(),
     eventId: integer("event_id").notNull(),  // Added missing event_id
-    voteType: varchar("vote_type", { length: 50 }).notNull(), // Added missing vote_type
+    voteType: varchar("vote_type", { length: 50 }), // Added missing vote_type
     createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`), // Added updatedAt
   },
