@@ -7,61 +7,61 @@ router.post('/vote', async (req, res) => {
   const { user_email, idea_id, event_id, vote_type } = req.body;
 
   if (!user_email || !idea_id || !event_id || !vote_type) {
-      return res.status(400).json({ message: 'Missing required fields' });
+    return res.status(400).json({ message: 'Missing required fields' });
   }
 
   try {
-      // Check if a vote already exists
-      const existingVoteQuery = `
+    // Check if a vote already exists
+    const existingVoteQuery = `
           SELECT * FROM votes WHERE user_email = $1 AND event_id = $2 AND vote_type = $3;
       `;
-      const existingVoteResult = await pool.query(existingVoteQuery, [user_email, event_id, vote_type]);
+    const existingVoteResult = await pool.query(existingVoteQuery, [user_email, event_id, vote_type]);
 
-      if (existingVoteResult.rowCount > 0) {
-          // Update the existing vote
-          const updateVoteQuery = `
+    if (existingVoteResult.rowCount > 0) {
+      // Update the existing vote
+      const updateVoteQuery = `
               UPDATE votes
               SET idea_id = $1, updated_at = NOW()
               WHERE user_email = $2 AND event_id = $3 AND vote_type = $4
               RETURNING *;
           `;
-          const updatedVote = await pool.query(updateVoteQuery, [idea_id, user_email, event_id, vote_type]);
-          return res.status(200).json({ message: 'Vote updated successfully', vote: updatedVote.rows[0] });
-      } else {
-          // Insert a new vote
-          const insertVoteQuery = `
+      const updatedVote = await pool.query(updateVoteQuery, [idea_id, user_email, event_id, vote_type]);
+      return res.status(200).json({ message: 'Vote updated successfully', vote: updatedVote.rows[0] });
+    } else {
+      // Insert a new vote
+      const insertVoteQuery = `
               INSERT INTO votes (user_email, idea_id, event_id, vote_type)
               VALUES ($1, $2, $3, $4)
               RETURNING *;
           `;
-          const newVote = await pool.query(insertVoteQuery, [user_email, idea_id, event_id, vote_type]);
-          return res.status(201).json({ message: 'Vote added successfully', vote: newVote.rows[0] });
-      }
+      const newVote = await pool.query(insertVoteQuery, [user_email, idea_id, event_id, vote_type]);
+      return res.status(201).json({ message: 'Vote added successfully', vote: newVote.rows[0] });
+    }
   } catch (error) {
-      console.error('Error handling vote:', error);
-      res.status(500).json({ message: 'Failed to handle vote' });
+    console.error('Error handling vote:', error);
+    res.status(500).json({ message: 'Failed to handle vote' });
   }
 });
 
-  
+
 router.get('/votes/idea/:idea_id', async (req, res) => {
   const { idea_id } = req.params;
   const { vote_type } = req.query; // Optional filter by vote type
 
   try {
-      let fetchVotesQuery = `SELECT * FROM votes WHERE idea_id = $1`;
-      let queryParams = [idea_id];
+    let fetchVotesQuery = `SELECT * FROM votes WHERE idea_id = $1`;
+    let queryParams = [idea_id];
 
-      if (vote_type) {
-          fetchVotesQuery += ` AND vote_type = $2`;
-          queryParams.push(vote_type);
-      }
+    if (vote_type) {
+      fetchVotesQuery += ` AND vote_type = $2`;
+      queryParams.push(vote_type);
+    }
 
-      const result = await pool.query(fetchVotesQuery, queryParams);
-      res.status(200).json({ votes: result.rows });
+    const result = await pool.query(fetchVotesQuery, queryParams);
+    res.status(200).json({ votes: result.rows });
   } catch (error) {
-      console.error('Error fetching votes for idea:', error);
-      res.status(500).json({ message: 'Failed to fetch votes' });
+    console.error('Error fetching votes for idea:', error);
+    res.status(500).json({ message: 'Failed to fetch votes' });
   }
 });
 
@@ -136,35 +136,35 @@ router.get('/idea/:idea_id', async (req, res) => {
 
 // Update average scores for each idea in Stage 3
 router.put('/update-average-scores', async (req, res) => {
-    try {
-      console.log('Calculating average scores for all ideas...');
-  
-      // Step 1: Calculate average rating for each idea
-      const averageScoreQuery = `
+  try {
+    console.log('Calculating average scores for all ideas...');
+
+    // Step 1: Calculate average rating for each idea
+    const averageScoreQuery = `
         SELECT idea_id, AVG(rating) AS average_score
         FROM votes
         GROUP BY idea_id;
       `;
-  
-      const { rows: averageScores } = await pool.query(averageScoreQuery);
-      console.log('Average scores calculated:', averageScores);
-  
-      // Step 2: Update the average_score in the ideas table
-      for (const { idea_id, average_score } of averageScores) {
-        const updateScoreQuery = `
+
+    const { rows: averageScores } = await pool.query(averageScoreQuery);
+    console.log('Average scores calculated:', averageScores);
+
+    // Step 2: Update the average_score in the ideas table
+    for (const { idea_id, average_score } of averageScores) {
+      const updateScoreQuery = `
           UPDATE ideas
           SET average_score = $1, updated_at = NOW()
           WHERE id = $2;
         `;
-        await pool.query(updateScoreQuery, [average_score, idea_id]);
-      }
-  
-      res.status(200).json({ message: 'Average scores updated successfully.' });
-    } catch (error) {
-      console.error('Error updating average scores:', error.message);
-      res.status(500).json({ message: 'Failed to update average scores.', error: error.message });
+      await pool.query(updateScoreQuery, [average_score, idea_id]);
     }
-  });
+
+    res.status(200).json({ message: 'Average scores updated successfully.' });
+  } catch (error) {
+    console.error('Error updating average scores:', error.message);
+    res.status(500).json({ message: 'Failed to update average scores.', error: error.message });
+  }
+});
 
 // Function to determine and store winners in the results table
 const determineWinners = async (event_id) => {
@@ -220,15 +220,28 @@ const determineWinners = async (event_id) => {
       const { idea_id, total_votes } = bestOverallRows[0];
 
       const bestOverallInsertQuery = `
-        INSERT INTO results (event_id, category, winning_idea_id, votes)
-        VALUES ($1, 'Best Overall', $2, $3)
-        ON CONFLICT (event_id, category)
-        DO UPDATE SET winning_idea_id = $2, votes = $3, created_at = NOW();
-      `;
+      INSERT INTO results (event_id, category, winning_idea_id, votes)
+      VALUES ($1, 'Hackathon Winner', $2, $3)
+      ON CONFLICT (event_id, category)
+      DO UPDATE SET winning_idea_id = $2, votes = $3, created_at = NOW();
+    `;
+
 
       await pool.query(bestOverallInsertQuery, [event_id, idea_id, total_votes]);
 
       console.log(`Best Overall Winner: Idea ${idea_id} with ${total_votes} votes.`);
+
+      // Insert Best Overall Winner into leaderboard_winners table
+      const insertLeaderboardWinnerQuery = `
+        INSERT INTO leaderboard_winners (event_id, idea_id)
+        VALUES ($1, $2)
+        ON CONFLICT (event_id, idea_id)
+        DO NOTHING;
+      `;
+
+      await pool.query(insertLeaderboardWinnerQuery, [event_id, idea_id]);
+
+      console.log(`Best Overall Winner added to leaderboard: Idea ${idea_id}.`);
     }
 
     console.log(`Winners determined successfully for event ${event_id}.`);
@@ -240,20 +253,19 @@ const determineWinners = async (event_id) => {
   }
 };
 
+router.post('/determine-winners', async (req, res) => {
+  const { event_id } = req.body;
 
-  router.post('/determine-winners', async (req, res) => {
-    const { event_id } = req.body;
+  if (!event_id) {
+    return res.status(400).json({ message: 'Missing event_id' });
+  }
 
-    if (!event_id) {
-        return res.status(400).json({ message: 'Missing event_id' });
-    }
-
-    try {
-        const result = await determineWinners(event_id);
-        res.status(200).json(result);
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to determine winners.', error: error.message });
-    }
+  try {
+    const result = await determineWinners(event_id);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to determine winners.', error: error.message });
+  }
 });
 
 router.get('/results', async (req, res) => {
@@ -286,5 +298,5 @@ router.get('/results', async (req, res) => {
 });
 
 
-  
+
 module.exports = router;
