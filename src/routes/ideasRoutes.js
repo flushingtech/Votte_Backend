@@ -317,4 +317,55 @@ router.get('/idea/:ideaId', async (req, res) => {
   }
 });
 
+router.put('/:id/add-contributor', async (req, res) => {
+  const { id } = req.params;
+  const { contributor_email } = req.body;
+
+  if (!contributor_email) {
+    return res.status(400).json({ message: 'Missing contributor email' });
+  }
+
+  try {
+    // Fetch existing contributors (stored as text)
+    const ideaCheckQuery = 'SELECT contributors FROM ideas WHERE id = $1';
+    const ideaCheckResult = await pool.query(ideaCheckQuery, [id]);
+
+    if (ideaCheckResult.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+
+    let existingContributors = ideaCheckResult.rows[0].contributors || '';
+
+    // ✅ Remove any "{}" placeholder
+    existingContributors = existingContributors.replace(/{}/g, '').trim();
+
+    // ✅ Avoid duplicate emails
+    const contributorsArray = existingContributors.length > 0 ? existingContributors.split(',') : [];
+    if (contributorsArray.includes(contributor_email)) {
+      return res.status(400).json({ message: 'Contributor already added' });
+    }
+
+    // ✅ Append the new email
+    contributorsArray.push(contributor_email);
+    const updatedContributors = contributorsArray.join(',');
+
+    // ✅ Update the database
+    const updateQuery = `
+      UPDATE ideas 
+      SET contributors = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+    const result = await pool.query(updateQuery, [updatedContributors, id]);
+
+    res.status(200).json({
+      message: 'Contributor added successfully!',
+      idea: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error adding contributor:', error);
+    res.status(500).json({ message: 'Failed to add contributor', error: error.message });
+  }
+});
+
 module.exports = router;

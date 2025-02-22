@@ -42,6 +42,7 @@ export const ideas = pgTable(
     isBuilt: boolean("is_built").default(false),
     stage: integer().default(1),
     averageScore: doublePrecision("average_score").default(0),
+    contributors: text("contributors").array().default(sql`'{}'::text[]`),
   },
   (table) => {
     return {
@@ -53,6 +54,7 @@ export const ideas = pgTable(
     };
   }
 );
+
 
 export const likes = pgTable(
   "likes",
