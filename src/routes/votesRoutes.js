@@ -204,7 +204,7 @@ const determineWinners = async (event_id) => {
       console.log(`Winner for ${category}: Idea ${idea_id} with ${votes} votes.`);
     }
 
-    // Determine Best Overall Winner
+    // Determine Hackathon Winner (previously Best Overall)
     const bestOverallQuery = `
       SELECT idea_id, COUNT(*) AS total_votes
       FROM votes
@@ -220,28 +220,15 @@ const determineWinners = async (event_id) => {
       const { idea_id, total_votes } = bestOverallRows[0];
 
       const bestOverallInsertQuery = `
-      INSERT INTO results (event_id, category, winning_idea_id, votes)
-      VALUES ($1, 'Hackathon Winner', $2, $3)
-      ON CONFLICT (event_id, category)
-      DO UPDATE SET winning_idea_id = $2, votes = $3, created_at = NOW();
-    `;
-
+        INSERT INTO results (event_id, category, winning_idea_id, votes)
+        VALUES ($1, 'Hackathon Winner', $2, $3)
+        ON CONFLICT (event_id, category)
+        DO UPDATE SET winning_idea_id = $2, votes = $3, created_at = NOW();
+      `;
 
       await pool.query(bestOverallInsertQuery, [event_id, idea_id, total_votes]);
 
-      console.log(`Best Overall Winner: Idea ${idea_id} with ${total_votes} votes.`);
-
-      // Insert Best Overall Winner into leaderboard_winners table
-      const insertLeaderboardWinnerQuery = `
-        INSERT INTO leaderboard_winners (event_id, idea_id)
-        VALUES ($1, $2)
-        ON CONFLICT (event_id, idea_id)
-        DO NOTHING;
-      `;
-
-      await pool.query(insertLeaderboardWinnerQuery, [event_id, idea_id]);
-
-      console.log(`Best Overall Winner added to leaderboard: Idea ${idea_id}.`);
+      console.log(`Hackathon Winner: Idea ${idea_id} with ${total_votes} votes.`);
     }
 
     console.log(`Winners determined successfully for event ${event_id}.`);
@@ -252,6 +239,7 @@ const determineWinners = async (event_id) => {
     throw error;
   }
 };
+
 
 router.post('/determine-winners', async (req, res) => {
   const { event_id } = req.body;
