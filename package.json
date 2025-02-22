@@ -5,8 +5,12 @@
   "main": "index.js",
   "scripts": {
     "start": "nodemon index.js",
-    "db": "drizzle-kit push",
-    "db-studio": "drizzle-kit studio"
+    "db:ci": "npm run db:generate && npm run db:dirty-migrations && npm run db:migrate",
+    "db:dirty-migrations": "test -z \"$(git status --porcelain -- ./src/db/migrations)\" || echo 'Dirty migrations found! Run `npm run db:generate` and ensure migrations are committed.'",
+    "db:migrate": "drizzle-kit migrate",
+    "db:generate": "drizzle-kit generate",
+    "db:generate:custom": "drizzle-kit generate --custom",
+    "db:studio": "drizzle-kit studio"
   },
   "keywords": [],
   "author": "",

@@ -31,8 +31,10 @@ Rename `.env.template` to `.env`. The `DATABASE_URL` is configured to connect to
 It's also used to apply changes to the database, also known as "migrations".
 
 - Update `src/db/schemas/` to make changes to the db, then,
-- `npm run db` to apply changes to the database.
-- `npm run db-studio` to launch a UI for managing the database.
+- `npm run db:generate` to generate SQL needed for the migrations. If custom SQL is needed for a migration, use `npm run db:generate:custom` and add the SQL to the generate file.
+- `npm run db:migrate` to apply changes to the database
+
+Run `npm run db:studio` to launch a UI for managing the database.
 
 ### Frontend
 
