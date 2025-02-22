@@ -368,25 +368,4 @@ router.put('/:id/add-contributor', async (req, res) => {
   }
 });
 
-router.get('/:idea_id/contributors', async (req, res) => {
-  const { idea_id } = req.params;
-
-  try {
-    const query = 'SELECT contributors FROM ideas WHERE id = $1';
-    const result = await pool.query(query, [idea_id]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Idea not found' });
-    }
-
-    const contributors = result.rows[0].contributors ? result.rows[0].contributors.split(',') : [];
-
-    res.status(200).json({ contributors });
-  } catch (error) {
-    console.error('Error fetching contributors:', error);
-    res.status(500).json({ message: 'Failed to fetch contributors', error: error.message });
-  }
-});
-
-
 module.exports = router;
