@@ -5,6 +5,9 @@ const router = express.Router();
 // GET Leaderboard (Hackathon Winners)
 router.get("/leaderboard", async (req, res) => {
   try {
+    // Get limit from query parameters, default to 3 if not provided
+    const limit = parseInt(req.query.limit) || 3;
+
     const leaderboardQuery = `
       SELECT 
         results.event_id, 
@@ -17,10 +20,11 @@ router.get("/leaderboard", async (req, res) => {
       FROM results
       LEFT JOIN ideas ON results.winning_idea_id = ideas.id
       WHERE results.category = 'Hackathon Winner'
-      ORDER BY results.votes DESC;
+      ORDER BY results.votes DESC
+      LIMIT $1;  -- Use parameterized query for security
     `;
 
-    const { rows } = await pool.query(leaderboardQuery);
+    const { rows } = await pool.query(leaderboardQuery, [limit]);
 
     res.status(200).json({
       success: true,
@@ -35,5 +39,6 @@ router.get("/leaderboard", async (req, res) => {
     });
   }
 });
+
 
 module.exports = router;

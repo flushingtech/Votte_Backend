@@ -26,7 +26,7 @@ app.use('/api/events', eventsRouter);
 
 app.use('/api/votes', votesRouter);
 
-app.use('/api', leaderboardRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
 // Default route for root '/'
 app.get('/', (req, res) => {
