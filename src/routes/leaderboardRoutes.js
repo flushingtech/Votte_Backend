@@ -2,15 +2,13 @@ const express = require("express");
 const pool = require("../../db");
 const router = express.Router();
 
-// GET Leaderboard (Hackathon Winners)
-router.get("/leaderboard", async (req, res) => {
+// GET Leaderboard (Last 3 Hackathon Winners)
+router.get("/leaderboard3winners", async (req, res) => {
   try {
-    // Get limit from query parameters, default to 3 if not provided
-    const limit = parseInt(req.query.limit) || 3;
-
     const leaderboardQuery = `
       SELECT 
         results.event_id, 
+        events.date AS event_date, 
         results.category, 
         results.winning_idea_id, 
         results.votes, 
@@ -19,12 +17,13 @@ router.get("/leaderboard", async (req, res) => {
         ideas.contributors 
       FROM results
       LEFT JOIN ideas ON results.winning_idea_id = ideas.id
+      LEFT JOIN events ON results.event_id = events.id
       WHERE results.category = 'Hackathon Winner'
-      ORDER BY results.votes DESC
-      LIMIT $1;  -- Use parameterized query for security
+      ORDER BY events.date DESC
+      LIMIT 3;  -- Fetch only the last 3 events
     `;
 
-    const { rows } = await pool.query(leaderboardQuery, [limit]);
+    const { rows } = await pool.query(leaderboardQuery);
 
     res.status(200).json({
       success: true,
@@ -39,6 +38,38 @@ router.get("/leaderboard", async (req, res) => {
     });
   }
 });
+
+
+// GET Leaderboard (Contributors with Most Hackathon Wins)
+router.get("/leaderboardMostWins", async (req, res) => {
+  try {
+    const leaderboardQuery = `
+      SELECT 
+        UNNEST(ideas.contributors) AS contributor,
+        COUNT(results.winning_idea_id) AS total_wins
+      FROM results
+      LEFT JOIN ideas ON results.winning_idea_id = ideas.id
+      WHERE results.category = 'Hackathon Winner'
+      GROUP BY contributor
+      ORDER BY total_wins DESC;
+    `;
+
+    const { rows } = await pool.query(leaderboardQuery);
+
+    res.status(200).json({
+      success: true,
+      leaderboard: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching leaderboard:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch leaderboard.",
+      error: error.message,
+    });
+  }
+});
+
 
 
 module.exports = router;
