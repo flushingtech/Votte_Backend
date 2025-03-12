@@ -8,7 +8,7 @@ router.get("/leaderboard3winners", async (req, res) => {
     const leaderboardQuery = `
       SELECT 
         results.event_id, 
-        events.date AS event_date, 
+        events.event_date AS event_date, 
         results.category, 
         results.winning_idea_id, 
         results.votes, 
@@ -19,8 +19,8 @@ router.get("/leaderboard3winners", async (req, res) => {
       LEFT JOIN ideas ON results.winning_idea_id = ideas.id
       LEFT JOIN events ON results.event_id = events.id
       WHERE results.category = 'Hackathon Winner'
-      ORDER BY events.date DESC
-      LIMIT 3;  -- Fetch only the last 3 events
+      ORDER BY events.event_date DESC 
+      LIMIT 3;
     `;
 
     const { rows } = await pool.query(leaderboardQuery);
@@ -38,6 +38,7 @@ router.get("/leaderboard3winners", async (req, res) => {
     });
   }
 });
+
 
 
 // GET Leaderboard (Contributors with Most Hackathon Wins)
@@ -54,7 +55,14 @@ router.get("/leaderboardMostWins", async (req, res) => {
       ORDER BY total_wins DESC;
     `;
 
-    const { rows } = await pool.query(leaderboardQuery);
+    // Fetch data
+    let { rows } = await pool.query(leaderboardQuery);
+
+    // Convert contributors field manually in case it's stored as text
+    rows = rows.map(row => ({
+      ...row,
+      contributor: row.contributor.replace(/[\{\}]/g, ""), // Remove any { } if stored as text
+    }));
 
     res.status(200).json({
       success: true,
@@ -69,7 +77,5 @@ router.get("/leaderboardMostWins", async (req, res) => {
     });
   }
 });
-
-
 
 module.exports = router;
