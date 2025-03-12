@@ -55,7 +55,14 @@ router.get("/leaderboardMostWins", async (req, res) => {
       ORDER BY total_wins DESC;
     `;
 
-    const { rows } = await pool.query(leaderboardQuery);
+    // Fetch data
+    let { rows } = await pool.query(leaderboardQuery);
+
+    // Convert contributors field manually in case it's stored as text
+    rows = rows.map(row => ({
+      ...row,
+      contributor: row.contributor.replace(/[\{\}]/g, ""), // Remove any { } if stored as text
+    }));
 
     res.status(200).json({
       success: true,
@@ -70,7 +77,5 @@ router.get("/leaderboardMostWins", async (req, res) => {
     });
   }
 });
-
-
 
 module.exports = router;
