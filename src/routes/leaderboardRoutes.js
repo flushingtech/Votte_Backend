@@ -46,23 +46,19 @@ router.get("/leaderboardMostWins", async (req, res) => {
   try {
     const leaderboardQuery = `
       SELECT 
-        UNNEST(ideas.contributors) AS contributor,
-        COUNT(results.winning_idea_id) AS total_wins
-      FROM results
-      LEFT JOIN ideas ON results.winning_idea_id = ideas.id
-      WHERE results.category = 'Hackathon Winner'
+        contributor,
+        COUNT(*) AS total_wins
+      FROM (
+        SELECT UNNEST(string_to_array(ideas.contributors, ',')) AS contributor
+        FROM results
+        LEFT JOIN ideas ON results.winning_idea_id = ideas.id
+        WHERE results.category = 'Hackathon Winner'
+      ) AS contributors_expanded
       GROUP BY contributor
       ORDER BY total_wins DESC;
     `;
 
-    // Fetch data
-    let { rows } = await pool.query(leaderboardQuery);
-
-    // Convert contributors field manually in case it's stored as text
-    rows = rows.map(row => ({
-      ...row,
-      contributor: row.contributor.replace(/[\{\}]/g, ""), // Remove any { } if stored as text
-    }));
+    const { rows } = await pool.query(leaderboardQuery);
 
     res.status(200).json({
       success: true,
@@ -77,5 +73,6 @@ router.get("/leaderboardMostWins", async (req, res) => {
     });
   }
 });
+
 
 module.exports = router;
