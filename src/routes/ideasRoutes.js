@@ -368,4 +368,30 @@ router.put('/:id/add-contributor', async (req, res) => {
   }
 });
 
+// GET endpoint to fetch ideas where the user is a contributor
+router.get('/contributed/:email', async (req, res) => {
+  const { email } = req.params;
+  console.log(`📢 Fetching contributed ideas for: ${email}`);
+
+  try {
+    const query = `
+      SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
+             events.title AS event_title, ideas.is_built, ideas.event_id
+      FROM ideas
+      INNER JOIN events ON ideas.event_id = events.id
+      WHERE contributors LIKE '%' || $1 || '%'
+      ORDER BY ideas.created_at DESC;
+    `;
+
+    console.log(`📢 Running query with email: ${email}`);
+    const result = await pool.query(query, [email]);
+
+    console.log(`✅ Contributed ideas found:`, result.rows);
+    res.status(200).json({ ideas: result.rows });
+  } catch (error) {
+    console.error('❌ Error fetching contributed ideas:', error);
+    res.status(500).json({ message: 'Failed to fetch contributed ideas', error: error.message });
+  }
+});
+
 module.exports = router;
