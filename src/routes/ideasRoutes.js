@@ -394,4 +394,33 @@ router.get('/contributed/:email', async (req, res) => {
   }
 });
 
+// GET total count of contributed ideas for a user
+router.get('/contributed-count/:email', async (req, res) => {
+  const { email } = req.params;
+
+  console.log(`🔍 Received request for contributed count of user: ${email}`);
+
+  try {
+    const countQuery = `
+      SELECT COUNT(*) 
+      FROM ideas 
+      WHERE contributors LIKE '%' || $1 || '%'
+    `;
+
+    console.log(`📊 Running query to count contributions for: ${email}`);
+    const countResult = await pool.query(countQuery, [email]);
+
+    const count = parseInt(countResult.rows[0].count, 10);
+
+    console.log(`✅ Total contributions found for ${email}: ${count}`);
+
+    res.status(200).json({ contributedCount: count });
+  } catch (error) {
+    console.error(`❌ Error fetching contributed count for ${email}:`, error.message);
+    res.status(500).json({ message: 'Failed to fetch contributed count', error: error.message });
+  }
+});
+
+
+
 module.exports = router;
