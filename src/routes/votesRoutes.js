@@ -285,6 +285,31 @@ router.get('/results', async (req, res) => {
   }
 });
 
+// GET total number of votes a user has received across all ideas (authored + contributed)
+router.get('/total-votes/:email', async (req, res) => {
+  const { email } = req.params;
+
+  console.log(`🔍 Counting total votes for user: ${email}`);
+
+  try {
+    const totalVotesQuery = `
+      SELECT COUNT(*) AS total_votes
+      FROM votes v
+      JOIN ideas i ON v.idea_id = i.id
+      WHERE i.email = $1 OR i.contributors LIKE '%' || $1 || '%'
+    `;
+
+    const result = await pool.query(totalVotesQuery, [email]);
+    const totalVotes = parseInt(result.rows[0].total_votes, 10);
+
+    console.log(`✅ Total votes received by ${email}: ${totalVotes}`);
+
+    res.status(200).json({ totalVotes });
+  } catch (error) {
+    console.error(`❌ Error fetching total votes for ${email}:`, error.message);
+    res.status(500).json({ message: 'Failed to fetch total votes', error: error.message });
+  }
+});
 
 
 module.exports = router;
