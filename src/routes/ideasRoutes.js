@@ -421,6 +421,60 @@ router.get('/contributed-count/:email', async (req, res) => {
   }
 });
 
+// GET total hackathon wins (including contributed ideas)
+router.get('/hackathon-wins/:email', async (req, res) => {
+  const { email } = req.params;
+
+  console.log(`🏆 Fetching Hackathon Wins for user: ${email}`);
+
+  try {
+    const query = `
+      SELECT COUNT(*) AS total_wins
+      FROM results r
+      JOIN ideas i ON r.winning_idea_id = i.id
+      WHERE r.category = 'Hackathon Winner'
+      AND (i.email = $1 OR i.contributors LIKE '%' || $1 || '%');
+    `;
+
+    const result = await pool.query(query, [email]);
+    const wins = parseInt(result.rows[0].total_wins, 10);
+
+    console.log(`✅ Total Hackathon Wins for ${email}: ${wins}`);
+
+    res.status(200).json({ totalWins: wins });
+  } catch (error) {
+    console.error(`❌ Error fetching Hackathon Wins for ${email}:`, error.message);
+    res.status(500).json({ message: 'Failed to fetch hackathon wins', error: error.message });
+  }
+});
+
+// GET detailed hackathon wins (with event title and date)
+router.get('/hackathon-wins-details/:email', async (req, res) => {
+  const { email } = req.params;
+
+  console.log(`📜 Fetching detailed Hackathon Wins for: ${email}`);
+
+  try {
+    const query = `
+      SELECT e.id AS event_id, e.title AS event_title, e.event_date
+      FROM results r
+      JOIN ideas i ON r.winning_idea_id = i.id
+      JOIN events e ON r.event_id = e.id
+      WHERE r.category = 'Hackathon Winner'
+      AND (i.email = $1 OR i.contributors LIKE '%' || $1 || '%')
+      ORDER BY e.event_date DESC;
+    `;
+
+    const result = await pool.query(query, [email]);
+
+    console.log(`✅ Hackathon wins fetched for ${email}:`, result.rows);
+
+    res.status(200).json({ wins: result.rows });
+  } catch (error) {
+    console.error(`❌ Error fetching detailed wins for ${email}:`, error.message);
+    res.status(500).json({ message: 'Failed to fetch hackathon win details', error: error.message });
+  }
+});
 
 
 module.exports = router;
