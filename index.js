@@ -7,6 +7,7 @@ const eventsRouter = require('./src/routes/eventsRoutes');
 const votesRouter = require('./src/routes/votesRoutes');
 const discordRoutes = require('./src/routes/discordRoutes');
 const leaderboardRoutes = require('./src/routes/leaderboardRoutes');
+const usersRoutes = require('./src/routes/usersRoutes');
 const cors = require('cors');
 const pool = require('./db');  // Import the database connection
 
@@ -30,6 +31,8 @@ app.use('/api/votes', votesRouter);
 app.use('/api/leaderboard', leaderboardRoutes);
 
 app.use('/api/discord', discordRoutes);
+
+app.use('/api/users', usersRoutes)
 
 // Default route for root '/'
 app.get('/', (req, res) => {

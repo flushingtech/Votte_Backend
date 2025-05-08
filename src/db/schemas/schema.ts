@@ -9,7 +9,6 @@ import {
   text,
   boolean,
   doublePrecision,
-  check,
   unique,
   time,
 } from "drizzle-orm/pg-core";
@@ -26,7 +25,6 @@ export const events = pgTable("events", {
   currentSubStage: text("current_sub_stage").default("1"),
 });
 
-
 export const ideas = pgTable(
   "ideas",
   {
@@ -42,19 +40,16 @@ export const ideas = pgTable(
     isBuilt: boolean("is_built").default(false),
     stage: integer().default(1),
     averageScore: doublePrecision("average_score").default(0),
-    contributors: text("contributors").array().default(sql`'{}'::text[]`),
+    contributors: text("contributors").default(""),
   },
-  (table) => {
-    return {
-      ideasEventIdFkey: foreignKey({
-        columns: [table.eventId],
-        foreignColumns: [events.id],
-        name: "ideas_event_id_fkey",
-      }).onDelete("cascade"),
-    };
-  }
+  (table) => ({
+    ideasEventIdFkey: foreignKey({
+      columns: [table.eventId],
+      foreignColumns: [events.id],
+      name: "ideas_event_id_fkey",
+    }).onDelete("cascade"),
+  })
 );
-
 
 export const likes = pgTable(
   "likes",
@@ -64,16 +59,14 @@ export const likes = pgTable(
     ideaId: integer("idea_id").notNull(),
     likedAt: timestamp("liked_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => {
-    return {
-      likesIdeaIdFkey: foreignKey({
-        columns: [table.ideaId],
-        foreignColumns: [ideas.id],
-        name: "likes_idea_id_fkey",
-      }).onDelete("cascade"),
-      uniqueUserLike: unique("unique_user_like").on(table.userEmail, table.ideaId), // Ensure unique likes
-    };
-  }
+  (table) => ({
+    likesIdeaIdFkey: foreignKey({
+      columns: [table.ideaId],
+      foreignColumns: [ideas.id],
+      name: "likes_idea_id_fkey",
+    }).onDelete("cascade"),
+    uniqueUserLike: unique("unique_user_like").on(table.userEmail, table.ideaId),
+  })
 );
 
 export const admin = pgTable("admin", {
@@ -86,25 +79,23 @@ export const votes = pgTable(
     id: serial().primaryKey().notNull(),
     userEmail: varchar("user_email", { length: 255 }).notNull(),
     ideaId: integer("idea_id").notNull(),
-    eventId: integer("event_id").notNull(),  // Added missing event_id
-    voteType: varchar("vote_type", { length: 50 }), // Added missing vote_type
+    eventId: integer("event_id").notNull(),
+    voteType: varchar("vote_type", { length: 50 }),
     createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`), // Added updatedAt
+    updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => {
-    return {
-      votesIdeaIdFkey: foreignKey({
-        columns: [table.ideaId],
-        foreignColumns: [ideas.id],
-        name: "votes_idea_id_fkey",
-      }).onDelete("cascade"),
-      votesEventIdFkey: foreignKey({
-        columns: [table.eventId],
-        foreignColumns: [events.id],
-        name: "votes_event_id_fkey",
-      }).onDelete("cascade"), // Ensure cascading delete for event_id
-    };
-  }
+  (table) => ({
+    votesIdeaIdFkey: foreignKey({
+      columns: [table.ideaId],
+      foreignColumns: [ideas.id],
+      name: "votes_idea_id_fkey",
+    }).onDelete("cascade"),
+    votesEventIdFkey: foreignKey({
+      columns: [table.eventId],
+      foreignColumns: [events.id],
+      name: "votes_event_id_fkey",
+    }).onDelete("cascade"),
+  })
 );
 
 export const results = pgTable(
@@ -117,21 +108,24 @@ export const results = pgTable(
     votes: integer().default(0),
     createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => {
-    return {
-      resultsEventIdFkey: foreignKey({
-        columns: [table.eventId],
-        foreignColumns: [events.id],
-        name: "results_event_id_fkey",
-      }).onDelete("cascade"),
-      resultsWinningIdeaIdFkey: foreignKey({
-        columns: [table.winningIdeaId],
-        foreignColumns: [ideas.id],
-        name: "results_winning_idea_id_fkey",
-      }).onDelete("cascade"),
-      uniqueEventCategory: unique("unique_event_category").on(table.eventId, table.category), 
-    };
-  }
+  (table) => ({
+    resultsEventIdFkey: foreignKey({
+      columns: [table.eventId],
+      foreignColumns: [events.id],
+      name: "results_event_id_fkey",
+    }).onDelete("cascade"),
+    resultsWinningIdeaIdFkey: foreignKey({
+      columns: [table.winningIdeaId],
+      foreignColumns: [ideas.id],
+      name: "results_winning_idea_id_fkey",
+    }).onDelete("cascade"),
+    uniqueEventCategory: unique("unique_event_category").on(table.eventId, table.category),
+  })
 );
 
-
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }),
+  email: varchar("email", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
+});
