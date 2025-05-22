@@ -303,7 +303,12 @@ router.get('/idea/:ideaId', async (req, res) => {
   const { ideaId } = req.params;
 
   try {
-    const query = 'SELECT * FROM ideas WHERE id = $1';
+    const query = `
+      SELECT ideas.*, events.title AS event_title, events.event_date
+      FROM ideas
+      LEFT JOIN events ON ideas.event_id = events.id
+      WHERE ideas.id = $1
+    `;
     const result = await pool.query(query, [ideaId]);
 
     if (result.rowCount === 0) {
@@ -316,6 +321,7 @@ router.get('/idea/:ideaId', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch idea details' });
   }
 });
+
 
 router.put('/:id/add-contributor', async (req, res) => {
   const { id } = req.params;
