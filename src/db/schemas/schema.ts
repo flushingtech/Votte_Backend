@@ -41,6 +41,7 @@ export const ideas = pgTable(
     stage: integer().default(1),
     averageScore: doublePrecision("average_score").default(0),
     contributors: text("contributors").default(""),
+    imageUrl: text("image_url"), // 👈 NEW COLUMN
   },
   (table) => ({
     ideasEventIdFkey: foreignKey({
@@ -50,6 +51,7 @@ export const ideas = pgTable(
     }).onDelete("cascade"),
   })
 );
+
 
 export const likes = pgTable(
   "likes",
