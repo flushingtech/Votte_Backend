@@ -6,31 +6,36 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const cloudinaryUploadFiles = async (files, folder) => {
-  try {
-    const filesCloudinaryInfo = [];
-
-    for (const file of files) {
-      const { path, originalname } = file;
-
-      const newPath = await cloudinary.uploader.upload(path, {
-        folder: folder,
-        use_filename: true,
-        unique_filename: true,
-        filename_override: originalname,
-      });
-
-      filesCloudinaryInfo.push({
-        cloudinary_id: newPath.public_id,
-        cloudinary_url: newPath.secure_url,
-        originalname: file.originalname,
-      });
+const cloudinaryUploadFiles = async (files, folder, customFilenamePrefix = '') => {
+    try {
+      const filesCloudinaryInfo = [];
+  
+      for (const [index, file] of files.entries()) {
+        const { path, originalname } = file;
+  
+        const extension = originalname.split('.').pop();
+        const filename = `${customFilenamePrefix}-${Date.now()}-${index}.${extension}`;
+  
+        const newPath = await cloudinary.uploader.upload(path, {
+          folder,
+          public_id: filename,
+          use_filename: true,
+          unique_filename: false,
+          overwrite: true,
+        });
+  
+        filesCloudinaryInfo.push({
+          cloudinary_id: newPath.public_id,
+          cloudinary_url: newPath.secure_url,
+          originalname: file.originalname,
+        });
+      }
+  
+      return filesCloudinaryInfo;
+    } catch (error) {
+      console.log(error);
     }
-
-    return filesCloudinaryInfo;
-  } catch (error) {
-    console.log(error);
-  }
-};
+  };
+  
 
 module.exports = { cloudinaryUploadFiles };
