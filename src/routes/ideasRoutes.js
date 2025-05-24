@@ -482,5 +482,19 @@ router.get('/hackathon-wins-details/:email', async (req, res) => {
   }
 });
 
+router.get('/with-images', async (req, res) => {
+  try {
+    const query = `
+      SELECT * FROM ideas
+      WHERE image_url IS NOT NULL
+      ORDER BY created_at DESC;
+    `;
+    const result = await pool.query(query);
+    res.status(200).json({ ideas: result.rows });
+  } catch (error) {
+    console.error('Error fetching ideas with images:', error);
+    res.status(500).json({ message: 'Failed to fetch ideas with images', error: error.message });
+  }
+});
 
 module.exports = router;
