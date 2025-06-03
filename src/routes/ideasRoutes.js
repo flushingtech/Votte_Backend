@@ -211,6 +211,24 @@ router.get('/likedIdeas/:email', async (req, res) => {
   }
 });
 
+router.get('/with-images', async (req, res) => {
+  try {
+    const query = `
+      SELECT ideas.*, events.title AS event_title, events.event_date
+      FROM ideas
+      LEFT JOIN events ON ideas.event_id = events.id
+      WHERE ideas.image_url IS NOT NULL
+      ORDER BY ideas.created_at DESC
+    `;
+    const result = await pool.query(query);
+    res.status(200).json({ ideas: result.rows });
+  } catch (error) {
+    console.error('Error fetching ideas with images:', error);
+    res.status(500).json({ message: 'Failed to fetch ideas with images', error: error.message });
+  }
+});
+
+
 // GET ideas by event ID
 router.get('/:eventId', async (req, res) => {
   const { eventId } = req.params;
@@ -482,19 +500,6 @@ router.get('/hackathon-wins-details/:email', async (req, res) => {
   }
 });
 
-router.get('/with-images', async (req, res) => {
-  try {
-    const query = `
-      SELECT * FROM ideas
-      WHERE image_url IS NOT NULL
-      ORDER BY created_at DESC;
-    `;
-    const result = await pool.query(query);
-    res.status(200).json({ ideas: result.rows });
-  } catch (error) {
-    console.error('Error fetching ideas with images:', error);
-    res.status(500).json({ message: 'Failed to fetch ideas with images', error: error.message });
-  }
-});
+
 
 module.exports = router;
