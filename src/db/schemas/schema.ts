@@ -24,6 +24,7 @@ export const events = pgTable("events", {
   link: text(),
   currentSubStage: text("current_sub_stage").default("1"),
   imageUrl: text("image_url"),
+  checkedIn: text("checked_in").default(""),
 });
 
 export const ideas = pgTable(

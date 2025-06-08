@@ -301,5 +301,36 @@ router.put("/set-sub-stage/:id", async (req, res) => {
     }
 });
 
+router.put('/:eventId/check-in', async (req, res) => {
+    const { eventId } = req.params;
+    const { email } = req.body;
+  
+    try {
+      const eventResult = await pool.query('SELECT checked_in FROM events WHERE id = $1', [eventId]);
+  
+      if (eventResult.rowCount === 0) {
+        return res.status(404).json({ message: 'Event not found' });
+      }
+  
+      let existing = eventResult.rows[0].checked_in || '';
+      existing = existing.replace(/{}/g, '').trim();
+      const emails = existing ? existing.split(',') : [];
+  
+      if (emails.includes(email)) {
+        return res.status(400).json({ message: 'Already checked in' });
+      }
+  
+      emails.push(email);
+      const updated = emails.join(',');
+  
+      await pool.query('UPDATE events SET checked_in = $1 WHERE id = $2', [updated, eventId]);
+  
+      res.status(200).json({ message: 'Checked in successfully' });
+    } catch (err) {
+      console.error('Check-in error:', err);
+      res.status(500).json({ message: 'Check-in failed' });
+    }
+  });
+  
 
 module.exports = router;

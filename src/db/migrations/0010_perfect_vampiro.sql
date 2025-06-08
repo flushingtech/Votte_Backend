@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "checked_in" text DEFAULT '';
