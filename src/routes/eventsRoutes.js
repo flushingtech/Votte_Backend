@@ -331,6 +331,24 @@ router.put('/:eventId/check-in', async (req, res) => {
       res.status(500).json({ message: 'Check-in failed' });
     }
   });
+
+  // GET endpoint to fetch events that have at least one image associated with them through ideas
+router.get('/with-images', async (req, res) => {
+    try {
+      const query = `
+        SELECT DISTINCT e.id, e.title, e.event_date, e.link, e.stage, e.current_sub_stage, e.checked_in
+        FROM events e
+        JOIN ideas i ON i.event_id = e.id
+        WHERE i.image_url IS NOT NULL
+        ORDER BY e.event_date DESC
+      `;
+      const result = await pool.query(query);
+      res.status(200).json({ events: result.rows });
+    } catch (error) {
+      console.error('Error fetching events with images:', error);
+      res.status(500).json({ message: 'Failed to fetch events with images', error: error.message });
+    }
+  });
   
 
 module.exports = router;
