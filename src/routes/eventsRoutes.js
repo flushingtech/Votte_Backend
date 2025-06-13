@@ -29,85 +29,83 @@ const titleCorrespondence = {
     "Virtual Hackathons": "Flushing Tech Virtual Hackathon",
 };
 
-// Function to fetch and add events from RSS feed
+
+
 async function fetchRssAndAddEvents() {
     const rssUrl = "https://www.meetup.com/flushing-tech/events/rss";
-
+  
     try {
-        console.log("Fetching RSS feed...");
-        const rssResponse = await axios.get(rssUrl);
-        const rssData = rssResponse.data;
-
-        // Parse RSS XML data
-        const parsedResult = await parseStringPromise(rssData);
-        const rssItems = parsedResult.rss.channel[0].item;
-
-        for (const item of rssItems) {
-            if (!item.link || !item.link[0]) {
-                console.error("Missing link for item:", item);
-                continue; // Skip items with missing link
-            }
-            const link = item.link[0];
-            // Skip this iteration if event is already in the database
-            if (await isEventInDatabase(link)) {
-                continue;
-            }
-
-            const originalTitle = item.title[0];
-            const eventTitle =
-                titleCorrespondence[originalTitle] || originalTitle;
-
-            let eventDate;
-            try {
-                eventDate = await getEventDate(link);
-            } catch (err) {
-                console.error(
-                    `Error extracting date for event "${originalTitle}":`,
-                    err.message
-                );
-                continue; // Skip this event if date extraction fails
-            }
-
-            if (eventTitle.toLowerCase().includes("happy hour")) {
-                continue; // Skip this iteration
-            }
-
-            if (await isEventTileDateInDatabase(eventTitle, eventDate)) {
-                //Insert the link to the database
-                const results = await pool.query(
-                    "UPDATE events SET link = $1 WHERE event_date = $2 AND link IS NULL",
-                    [link, eventDate]
-                );
-                console.log(
-                    `Update event link for ${eventTitle} on ${eventDate} with ${link}.`
-                );
-            } else {
-                // Add event to the database
-                await pool.query(
-                    "INSERT INTO events (title, event_date, link) VALUES ($1, $2, $3)",
-                    [eventTitle, eventDate, link]
-                );
-                console.log(
-                    `Inserted new event: ${eventTitle} on ${eventDate}`
-                );
-            }
+      console.log("Fetching RSS feed...");
+      const rssResponse = await axios.get(rssUrl);
+      const rssData = rssResponse.data;
+  
+      const parsedResult = await parseStringPromise(rssData);
+      const rssItems = parsedResult.rss.channel[0].item;
+  
+      for (const item of rssItems) {
+        if (!item.link || !item.link[0]) continue;
+  
+        const link = item.link[0];
+        if (await isEventInDatabase(link)) continue;
+  
+        const originalTitle = item.title[0];
+        const eventTitle = titleCorrespondence[originalTitle] || originalTitle;
+  
+        let eventDate;
+        try {
+          eventDate = await getEventDate(link); // Expected to return a Date object
+        } catch (err) {
+          console.error(`Error extracting date for event "${originalTitle}":`, err.message);
+          continue;
         }
-        console.log("Finished processing RSS events.");
+  
+        if (eventTitle.toLowerCase().includes("happy hour")) continue;
+  
+        // Skip invalid dates
+        if (!(eventDate instanceof Date) || isNaN(eventDate.getTime())) continue;
+  
+        const dateOnly = eventDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+  
+        // Eastern Midnight manually offset to UTC
+        const easternMidnight = new Date(
+          new Date(`${dateOnly}T00:00:00-04:00`).toISOString()
+        );
+  
+        if (await isEventTileDateInDatabase(eventTitle, easternMidnight)) {
+          await pool.query(
+            "UPDATE events SET link = $1 WHERE event_date = $2 AND link IS NULL",
+            [link, easternMidnight]
+          );
+          console.log(`Updated event link for ${eventTitle} on ${dateOnly}`);
+        } else {
+          await pool.query(
+            "INSERT INTO events (title, event_date, link) VALUES ($1, $2, $3)",
+            [eventTitle, easternMidnight, link]
+          );
+          console.log(`Inserted new event: ${eventTitle} on ${dateOnly}`);
+        }
+      }
+  
+      console.log("Finished processing RSS events.");
     } catch (error) {
-        console.error("Error fetching or adding RSS events:", error.message);
-        throw new Error("Error fetching or adding RSS events");
+      console.error("Error fetching or adding RSS events:", error.message);
+      throw new Error("Error fetching or adding RSS events");
     }
+  
     async function isEventInDatabase(link) {
-        const query = "SELECT * FROM events WHERE link = $1";
-        const result = await pool.query(query, [link]);
-        return result.rowCount > 0;
+      const query = "SELECT * FROM events WHERE link = $1";
+      const result = await pool.query(query, [link]);
+      return result.rowCount > 0;
     }
+  
     async function isEventTileDateInDatabase(eventTitle, eventDate) {
-        const query = `SELECT * FROM events WHERE event_date = $1 AND title = $2`;
-        const result = await pool.query(query, [eventDate, eventTitle]);
-        return result.rowCount > 0;
+      const query = `SELECT * FROM events WHERE event_date = $1 AND title = $2`;
+      const result = await pool.query(query, [eventDate, eventTitle]);
+      return result.rowCount > 0;
     }
-}
+  }
+  
+
 
 // Ensure this function runs when `/all-events` is called
 router.get("/all-events", async (req, res) => {
@@ -130,23 +128,31 @@ router.get("/all-events", async (req, res) => {
 router.post("/add-event", async (req, res) => {
     const { email, title, eventDate } = req.body;
     try {
-        const adminResult = await pool.query(
-            "SELECT email FROM admin WHERE email = $1",
-            [email]
-        );
-        if (adminResult.rowCount === 0) {
-            return res.status(403).json({ message: "Unauthorized" });
-        }
-        const result = await pool.query(
-            "INSERT INTO events (title, event_date) VALUES ($1, $2) RETURNING *",
-            [title, eventDate]
-        );
-        res.status(201).json(result.rows[0]);
+      const adminResult = await pool.query(
+        "SELECT email FROM admin WHERE email = $1",
+        [email]
+      );
+      if (adminResult.rowCount === 0) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+  
+      // Convert Eastern Time midnight to UTC manually (DST assumed -04:00)
+      const easternMidnight = new Date(
+        new Date(`${eventDate}T00:00:00-04:00`).toISOString()
+      );
+  
+      const result = await pool.query(
+        "INSERT INTO events (title, event_date) VALUES ($1, $2) RETURNING *",
+        [title, easternMidnight]
+      );
+  
+      res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error("Error adding event:", error.message);
-        res.status(500).json({ message: "Error adding event" });
+      console.error("Error adding event:", error.message);
+      res.status(500).json({ message: "Error adding event" });
     }
-});
+  });
+  
 
 // Delete an event
 router.delete("/delete-event/:id", async (req, res) => {

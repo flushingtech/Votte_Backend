@@ -25,6 +25,7 @@
     "axios": "^1.7.7",
     "cloudinary": "^2.6.1",
     "cors": "^2.8.5",
+    "date-fns-tz": "^3.2.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.36.4",
     "express": "^4.21.0",
