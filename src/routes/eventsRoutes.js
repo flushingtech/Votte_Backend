@@ -30,6 +30,7 @@ const titleCorrespondence = {
 };
 
 
+
 async function fetchRssAndAddEvents() {
     const rssUrl = "https://www.meetup.com/flushing-tech/events/rss";
   
@@ -59,16 +60,13 @@ async function fetchRssAndAddEvents() {
         }
   
         if (eventTitle.toLowerCase().includes("happy hour")) continue;
+  
+        // Skip invalid dates
         if (!(eventDate instanceof Date) || isNaN(eventDate.getTime())) continue;
   
-        // Determine if date is on or after June 14, 2025
-        const june14 = new Date("2025-06-14");
-        if (eventDate >= june14) {
-          eventDate.setDate(eventDate.getDate() + 1);
-        }
+        const dateOnly = eventDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
   
-        const dateOnly = eventDate.toISOString().split('T')[0];
-  
+        // Eastern Midnight manually offset to UTC
         const easternMidnight = new Date(
           new Date(`${dateOnly}T00:00:00-04:00`).toISOString()
         );
@@ -105,7 +103,9 @@ async function fetchRssAndAddEvents() {
       const result = await pool.query(query, [eventDate, eventTitle]);
       return result.rowCount > 0;
     }
-  }  
+  }
+  
+
 
 // Ensure this function runs when `/all-events` is called
 router.get("/all-events", async (req, res) => {
