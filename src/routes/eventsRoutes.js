@@ -136,9 +136,13 @@ router.post("/add-event", async (req, res) => {
         return res.status(403).json({ message: "Unauthorized" });
       }
   
-      // Convert Eastern Time midnight to UTC manually (DST assumed -04:00)
+      // Add 1 day to the input date
+      const adjustedDate = new Date(eventDate);
+      adjustedDate.setDate(adjustedDate.getDate() + 1);
+  
+      // Convert to Eastern Time midnight and shift to UTC
       const easternMidnight = new Date(
-        new Date(`${eventDate}T00:00:00-04:00`).toISOString()
+        new Date(`${adjustedDate.toISOString().split("T")[0]}T00:00:00-04:00`).toISOString()
       );
   
       const result = await pool.query(
@@ -152,6 +156,7 @@ router.post("/add-event", async (req, res) => {
       res.status(500).json({ message: "Error adding event" });
     }
   });
+  
   
 
 // Delete an event
