@@ -60,13 +60,17 @@ async function fetchRssAndAddEvents() {
         }
   
         if (eventTitle.toLowerCase().includes("happy hour")) continue;
-  
-        // Skip invalid dates
         if (!(eventDate instanceof Date) || isNaN(eventDate.getTime())) continue;
   
-        const dateOnly = eventDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+        // Skip events before June 13, 2025
+        const june13 = new Date("2025-06-13");
+        if (eventDate < june13) continue;
   
-        // Eastern Midnight manually offset to UTC
+        // Bump date by 1 day
+        eventDate.setDate(eventDate.getDate() + 1);
+  
+        const dateOnly = eventDate.toISOString().split("T")[0];
+  
         const easternMidnight = new Date(
           new Date(`${dateOnly}T00:00:00-04:00`).toISOString()
         );
