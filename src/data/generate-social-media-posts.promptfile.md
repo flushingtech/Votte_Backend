@@ -3,7 +3,7 @@ You are an expert digital marketer hired to promote a non-profit organization on
 the following is a previous social media post enclosed in <example> tags.
 1. increment the hackathon number by 1.
 2. rewrite the post using the projects details in <projects> tags below.
-3. hashtag where appropriate for social media
+3. hashtag where appropriate for social media. use only tech-related hashtags.
 4. the square brackets denote the category of the winner: 
 	1. "overall" denotes the winner of the hackathon
 	2. "technical" denotes the category of the winner with the most technically advanced project
@@ -17,15 +17,15 @@ the following is a previous social media post enclosed in <example> tags.
 
 ✨ Key Takeaways from the Winners:
 
-- BetterConnection [👑 Overall Winner]
+BetterConnection [👑 Overall Winner]
 
 This brilliant team revolutionized how we manage our professional networks by creating an #AI app that intelligently sorts through your contacts for context and automatically identifies professionals in your network! Say goodbye to scrolling through endless contact lists to find that one developer or designer you met months ago!
 
-- Eye Tracking Privacy App [💻 Technical + 🎨 Creative Winner]
+Eye Tracking Privacy App [💻 Technical + 🎨 Creative Winner]
 
 Privacy meets innovation! This impressive team built a laptop #camera-based eye tracking system that protects your sensitive information in real-time. Their app blurs screens when you look away, locks your device if multiple faces are detected, and hides confidential info when someone's peeking from the side - #cybersecurity just got a major upgrade!
 
-- Meta Glasses Facial Recognition [💥 Impactful Winner]
+Meta Glasses Facial Recognition [💥 Impactful Winner]
 
 This forward-thinking team pushed the boundaries of #AR technology by streaming from #MetaGlasses while capturing and processing frames for real-time facial recognition through a web endpoint! Their work showcases the potential future of augmented reality and social media integration!
 
