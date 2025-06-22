@@ -45,6 +45,24 @@ router.post('/submitIdea', async (req, res) => {
   }
 });
 
+router.get('/previous-projects', async (req, res) => {
+  try {
+    const ideasQuery = `
+      SELECT ideas.*
+      FROM ideas
+      JOIN events ON ideas.event_id = events.id
+      WHERE events.stage = 3
+      ORDER BY events.event_date DESC, ideas.created_at DESC
+    `;
+    const { rows } = await pool.query(ideasQuery);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching previous projects:', error);
+    res.status(500).json({ message: 'Failed to fetch previous projects' });
+  }
+});
+
+
 
 router.get('/allIdeas', async (req, res) => {
   try {
@@ -499,7 +517,6 @@ router.get('/hackathon-wins-details/:email', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch hackathon win details', error: error.message });
   }
 });
-
 
 
 module.exports = router;
