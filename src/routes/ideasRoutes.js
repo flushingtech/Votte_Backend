@@ -48,11 +48,14 @@ router.post('/submitIdea', async (req, res) => {
 router.get('/previous-projects', async (req, res) => {
   try {
     const ideasQuery = `
-      SELECT ideas.*
-      FROM ideas
-      JOIN events ON ideas.event_id = events.id
-      WHERE events.stage = 3
-      ORDER BY events.event_date DESC, ideas.created_at DESC
+SELECT 
+  ideas.idea, 
+  ideas.contributors, 
+  events.title AS event_title
+FROM ideas
+JOIN events ON ideas.event_id = events.id
+WHERE events.stage = 3
+ORDER BY events.event_date DESC, ideas.created_at DESC;
     `;
     const { rows } = await pool.query(ideasQuery);
     res.json(rows);
@@ -66,7 +69,7 @@ router.get('/previous-projects', async (req, res) => {
 
 router.get('/allIdeas', async (req, res) => {
   try {
-    const fetchQuery = 'SELECT * FROM ideas ORDER BY likes DESC, created_at DESC';  
+    const fetchQuery = 'SELECT * FROM ideas ORDER BY likes DESC, created_at DESC';
     const result = await pool.query(fetchQuery);
 
     console.log('Fetched ideas:', result.rows);
