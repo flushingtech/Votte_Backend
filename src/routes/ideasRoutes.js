@@ -51,7 +51,8 @@ router.get('/previous-projects', async (req, res) => {
 SELECT 
   ideas.idea, 
   ideas.contributors, 
-  events.title AS event_title
+  events.title AS event_title,
+  events.event_date
 FROM ideas
 JOIN events ON ideas.event_id = events.id
 WHERE events.stage = 3
