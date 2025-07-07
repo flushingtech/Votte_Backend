@@ -78,6 +78,13 @@
       "when": 1749347178911,
       "tag": "0010_perfect_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1751855679973,
+      "tag": "0011_solid_bug",
+      "breakpoints": true
     }
   ]
 }
