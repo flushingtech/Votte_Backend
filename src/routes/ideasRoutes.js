@@ -48,21 +48,57 @@ router.post('/submitIdea', async (req, res) => {
 router.get('/previous-projects', async (req, res) => {
   try {
     const ideasQuery = `
-SELECT 
-  ideas.idea, 
-  ideas.contributors, 
-  events.title AS event_title,
-  events.event_date
-FROM ideas
-JOIN events ON ideas.event_id = events.id
-WHERE events.stage = 3
-ORDER BY events.event_date DESC, ideas.created_at DESC;
+      SELECT 
+        ideas.id,
+        ideas.idea, 
+        ideas.contributors, 
+        events.title AS event_title,
+        events.event_date
+      FROM ideas
+      JOIN events ON ideas.event_id = events.id::text
+      WHERE events.stage = 3
+      ORDER BY events.event_date DESC, ideas.created_at DESC;
     `;
     const { rows } = await pool.query(ideasQuery);
     res.json(rows);
   } catch (error) {
     console.error('Error fetching previous projects:', error);
     res.status(500).json({ message: 'Failed to fetch previous projects' });
+  }
+});
+
+
+router.put("/add-event-to-idea/:id", async (req, res) => {
+  const ideaId = req.params.id;
+  const { event_id } = req.body;
+
+  try {
+    const ideaResult = await pool.query("SELECT * FROM ideas WHERE id = $1", [ideaId]);
+
+    if (ideaResult.rows.length === 0) {
+      return res.status(404).json({ message: "Idea not found" });
+    }
+
+    let existingEventIds = ideaResult.rows[0].event_id || "";
+    let updatedEventIds = existingEventIds
+      ? existingEventIds.split(",").map(id => id.trim())
+      : [];
+
+    if (!updatedEventIds.includes(String(event_id))) {
+      updatedEventIds.push(String(event_id));
+    }
+
+    const newEventIdString = updatedEventIds.join(",");
+
+    await pool.query("UPDATE ideas SET event_id = $1 WHERE id = $2", [
+      newEventIdString,
+      ideaId,
+    ]);
+
+    res.status(200).json({ message: "Event added to idea successfully" });
+  } catch (error) {
+    console.error("Error adding event to idea:", error);
+    res.status(500).json({ message: "Failed to add event to idea" });
   }
 });
 
@@ -254,8 +290,13 @@ router.get('/with-images', async (req, res) => {
 // GET ideas by event ID
 router.get('/:eventId', async (req, res) => {
   const { eventId } = req.params;
+
   try {
-    const result = await pool.query('SELECT * FROM ideas WHERE event_id = $1', [eventId]);
+    const query = `
+      SELECT * FROM ideas
+      WHERE (',' || event_id || ',') LIKE '%,' || $1 || ',%'
+    `;
+    const result = await pool.query(query, [eventId]);
     res.status(200).json({ ideas: result.rows });
   } catch (error) {
     console.error('Error fetching ideas for event:', error);
@@ -263,17 +304,18 @@ router.get('/:eventId', async (req, res) => {
   }
 });
 
+
 // Endpoint to get user ideas with event titles and event_id
 router.get('/user/:email', async (req, res) => {
   const { email } = req.params;
   try {
     const query = `
       SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
-             ideas.event_id,  -- Include event_id here
+             ideas.event_id,
              events.title AS event_title, 
-             ideas.is_built  -- Include is_built field
+             ideas.is_built
       FROM ideas
-      INNER JOIN events ON ideas.event_id = events.id
+      INNER JOIN events ON (',' || ideas.event_id || ',') LIKE '%,' || events.id::text || ',%'
       WHERE ideas.email = $1
       ORDER BY ideas.created_at DESC
     `;
@@ -285,8 +327,6 @@ router.get('/user/:email', async (req, res) => {
   }
 });
 
-
-
 // Endpoint to get liked ideas with event titles
 router.get('/liked/:email', async (req, res) => {
   const { email } = req.params;
@@ -295,7 +335,7 @@ router.get('/liked/:email', async (req, res) => {
       SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
              events.title AS event_title
       FROM ideas
-      INNER JOIN events ON ideas.event_id = events.id
+      INNER JOIN events ON (',' || ideas.event_id || ',') LIKE '%,' || events.id::text || ',%'
       INNER JOIN likes ON ideas.id = likes.idea_id
       WHERE likes.user_email = $1
       ORDER BY ideas.created_at DESC
@@ -424,7 +464,7 @@ router.get('/contributed/:email', async (req, res) => {
       SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
              events.title AS event_title, ideas.is_built, ideas.event_id
       FROM ideas
-      INNER JOIN events ON ideas.event_id = events.id
+      INNER JOIN events ON (',' || ideas.event_id || ',') LIKE '%,' || events.id::text || ',%'
       WHERE contributors LIKE '%' || $1 || '%'
       ORDER BY ideas.created_at DESC;
     `;

@@ -38,22 +38,18 @@ export const ideas = pgTable(
     likes: integer().default(0),
     createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
-    eventId: integer("event_id"),
+    
+    // ✅ Updated from integer("event_id") to text
+    eventId: text("event_id").notNull(), 
+
     isBuilt: boolean("is_built").default(false),
     stage: integer().default(1),
     averageScore: doublePrecision("average_score").default(0),
     contributors: text("contributors").default(""),
-    imageUrl: text("image_url"), // 👈 NEW COLUMN
-  },
-  (table) => ({
-    ideasEventIdFkey: foreignKey({
-      columns: [table.eventId],
-      foreignColumns: [events.id],
-      name: "ideas_event_id_fkey",
-    }).onDelete("cascade"),
-  })
+    imageUrl: text("image_url"),
+  }
+  // ❌ Removed foreign key here because eventId is now a text list
 );
-
 
 export const likes = pgTable(
   "likes",
