@@ -27,29 +27,22 @@ export const events = pgTable("events", {
   checkedIn: text("checked_in").default(""),
 });
 
-export const ideas = pgTable(
-  "ideas",
-  {
-    id: serial().primaryKey().notNull(),
-    email: varchar({ length: 255 }).notNull(),
-    idea: text().notNull(),
-    description: text().notNull(),
-    technologies: text().notNull(),
-    likes: integer().default(0),
-    createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
-    
-    // ✅ Updated from integer("event_id") to text
-    eventId: text("event_id").notNull(), 
-
-    isBuilt: boolean("is_built").default(false),
-    stage: integer().default(1),
-    averageScore: doublePrecision("average_score").default(0),
-    contributors: text("contributors").default(""),
-    imageUrl: text("image_url"),
-  }
-  // ❌ Removed foreign key here because eventId is now a text list
-);
+export const ideas = pgTable("ideas", {
+  id: serial().primaryKey().notNull(),
+  email: varchar({ length: 255 }).notNull(),
+  idea: text().notNull(),
+  description: text().notNull(),
+  technologies: text().notNull(),
+  likes: integer().default(0),
+  createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
+  eventId: text("event_id").notNull(), // ✅ now a comma-separated string
+  isBuilt: boolean("is_built").default(false),
+  stage: integer().default(1),
+  averageScore: doublePrecision("average_score").default(0),
+  contributors: text("contributors").default(""),
+  imageUrl: text("image_url"),
+});
 
 export const likes = pgTable(
   "likes",
