@@ -562,5 +562,48 @@ router.get('/hackathon-wins-details/:email', async (req, res) => {
   }
 });
 
+router.delete('/idea/:id/:eventId', async (req, res) => {
+  const { id, eventId } = req.params;
+  const { email } = req.query;
+
+  try {
+    // Optionally validate email is admin
+    const adminCheck = await pool.query('SELECT * FROM admin WHERE email = $1', [email]);
+    if (adminCheck.rowCount === 0) {
+      return res.status(403).json({ message: 'Not authorized to delete idea' });
+    }
+
+    const ideaQuery = 'SELECT event_id FROM ideas WHERE id = $1';
+    const ideaResult = await pool.query(ideaQuery, [id]);
+
+    if (ideaResult.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+
+    const currentEventIds = ideaResult.rows[0].event_id;
+
+    const eventIdsArray = currentEventIds
+      .split(',')
+      .map(eid => eid.trim())
+      .filter(eid => eid);
+
+    const updatedEventIds = eventIdsArray.filter(eid => eid !== eventId);
+
+    if (updatedEventIds.length === 0) {
+      await pool.query('DELETE FROM ideas WHERE id = $1', [id]);
+      return res.status(200).json({ message: 'Idea deleted entirely (no more events)' });
+    } else {
+      await pool.query(
+        'UPDATE ideas SET event_id = $1 WHERE id = $2',
+        [updatedEventIds.join(','), id]
+      );
+      return res.status(200).json({ message: 'Removed event from idea, idea still exists' });
+    }
+  } catch (error) {
+    console.error('Error removing event from idea:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
 module.exports = router;
