@@ -378,29 +378,38 @@ router.put('/set-stage/:id', async (req, res) => {
   }
 });
 
-// GET endpoint to fetch a single idea by ID
+// GET endpoint to fetch a single idea by ID (with support for multiple event_ids)
 router.get('/idea/:ideaId', async (req, res) => {
   const { ideaId } = req.params;
 
   try {
-    const query = `
-      SELECT ideas.*, events.title AS event_title, events.event_date
-      FROM ideas
-      LEFT JOIN events ON ideas.event_id = events.id
-      WHERE ideas.id = $1
-    `;
-    const result = await pool.query(query, [ideaId]);
+    // Fetch the idea first
+    const ideaQuery = `SELECT * FROM ideas WHERE id = $1`;
+    const ideaResult = await pool.query(ideaQuery, [ideaId]);
 
-    if (result.rowCount === 0) {
+    if (ideaResult.rowCount === 0) {
       return res.status(404).json({ message: 'Idea not found' });
     }
 
-    res.status(200).json({ idea: result.rows[0] });
+    const idea = ideaResult.rows[0];
+
+    // Parse event_ids and fetch related events
+    const eventQuery = `
+      SELECT id, title, event_date
+      FROM events
+      WHERE id = ANY (string_to_array($1, ',')::int[])
+    `;
+    const eventResult = await pool.query(eventQuery, [idea.event_id]);
+
+    idea.events = eventResult.rows;
+
+    res.status(200).json({ idea });
   } catch (error) {
     console.error('Error fetching idea details:', error);
     res.status(500).json({ message: 'Failed to fetch idea details' });
   }
 });
+
 
 
 router.put('/:id/add-contributor', async (req, res) => {
