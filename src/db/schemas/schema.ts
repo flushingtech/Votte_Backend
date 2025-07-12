@@ -122,3 +122,25 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull(),
   createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const ideaEventMetadata = pgTable("idea_event_metadata", {
+  id: serial().primaryKey().notNull(),
+  ideaId: integer("idea_id").notNull(),
+  eventId: integer("event_id").notNull(),
+  description: text("description").notNull(),
+  technologies: text("technologies").notNull(),
+  contributors: text("contributors").default(""),
+  isBuilt: boolean("is_built").default(false),
+  createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  ideaEventMetadataIdeaIdFkey: foreignKey({
+    columns: [table.ideaId],
+    foreignColumns: [ideas.id],
+    name: "idea_event_metadata_idea_id_fkey"
+  }).onDelete("cascade"),
+  ideaEventMetadataEventIdFkey: foreignKey({
+    columns: [table.eventId],
+    foreignColumns: [events.id],
+    name: "idea_event_metadata_event_id_fkey"
+  }).onDelete("cascade")
+}));
