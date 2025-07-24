@@ -274,7 +274,7 @@ router.get('/with-images', async (req, res) => {
     const query = `
       SELECT ideas.*, events.title AS event_title, events.event_date
       FROM ideas
-      LEFT JOIN events ON ideas.event_id = events.id
+      LEFT JOIN events ON (',' || ideas.event_id || ',') LIKE '%,' || events.id::text || ',%'
       WHERE ideas.image_url IS NOT NULL
       ORDER BY ideas.created_at DESC
     `;
