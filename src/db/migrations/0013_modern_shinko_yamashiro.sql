@@ -1,0 +1,1 @@
+ALTER TABLE "ideas" ALTER COLUMN "event_id" SET DATA TYPE integer;

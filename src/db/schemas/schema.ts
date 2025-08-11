@@ -27,6 +27,8 @@ export const events = pgTable("events", {
   checkedIn: text("checked_in").default(""),
 });
 
+// In your schemas.ts file
+
 export const ideas = pgTable("ideas", {
   id: serial().primaryKey().notNull(),
   email: varchar({ length: 255 }).notNull(),
@@ -36,13 +38,17 @@ export const ideas = pgTable("ideas", {
   likes: integer().default(0),
   createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
-  eventId: text("event_id").notNull(), // ✅ now a comma-separated string
+  eventId: integer("event_id").notNull(), // <-- CHANGE THIS FROM `text` to `integer`
   isBuilt: boolean("is_built").default(false),
   stage: integer().default(1),
   averageScore: doublePrecision("average_score").default(0),
   contributors: text("contributors").default(""),
   imageUrl: text("image_url"),
 });
+
+// No change needed for foreign keys in other tables that reference eventId,
+// as they are already defined as integer (e.g., votes.eventId, results.eventId, ideaEventMetadata.eventId).
+// The issue was specifically with ideas.eventId being `text`.
 
 export const likes = pgTable(
   "likes",
