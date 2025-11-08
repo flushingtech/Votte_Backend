@@ -142,5 +142,6 @@ export const ideaEventMetadata = pgTable("idea_event_metadata", {
     columns: [table.eventId],
     foreignColumns: [events.id],
     name: "idea_event_metadata_event_id_fkey"
-  }).onDelete("cascade")
+  }).onDelete("cascade"),
+  uniqueIdeaEvent: unique("unique_idea_event").on(table.ideaId, table.eventId)
 }));

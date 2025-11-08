@@ -26,18 +26,20 @@ router.post('/submitIdea', async (req, res) => {
       return res.status(400).json({ message: `You can only submit up to ${MAX_IDEAS_PER_USER} ideas per event.` });
     }
 
-    // Insert new idea
+    // Insert new idea - only in ideas table for first event
     const insertQuery = `
       INSERT INTO ideas (email, idea, description, technologies, event_id, is_built)
       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
     `;
     const result = await pool.query(insertQuery, [email, idea, description, technologies, event_id, is_built]);
 
-    console.log('Idea inserted successfully:', result.rows[0]);
+    const newIdea = result.rows[0];
+
+    console.log('Idea inserted successfully:', newIdea);
 
     res.status(201).json({
       message: 'Idea submitted successfully!',
-      idea: result.rows[0]
+      idea: newIdea
     });
   } catch (error) {
     console.error('Error while inserting idea:', error);
@@ -70,7 +72,7 @@ router.get('/previous-projects', async (req, res) => {
 
 router.put("/add-event-to-idea/:id", async (req, res) => {
   const ideaId = req.params.id;
-  const { event_id } = req.body;
+  const { event_id, description, technologies, is_built } = req.body;
 
   try {
     const ideaResult = await pool.query("SELECT * FROM ideas WHERE id = $1", [ideaId]);
@@ -79,7 +81,8 @@ router.put("/add-event-to-idea/:id", async (req, res) => {
       return res.status(404).json({ message: "Idea not found" });
     }
 
-    let existingEventIds = ideaResult.rows[0].event_id || "";
+    const idea = ideaResult.rows[0];
+    let existingEventIds = idea.event_id || "";
     let updatedEventIds = existingEventIds
       ? existingEventIds.split(",").map(id => id.trim())
       : [];
@@ -95,7 +98,32 @@ router.put("/add-event-to-idea/:id", async (req, res) => {
       ideaId,
     ]);
 
-    res.status(200).json({ message: "Event added to idea successfully" });
+    // Create event-specific metadata entry
+    // Require event-specific description - no fallback to main idea values
+    if (!description) {
+      return res.status(400).json({
+        message: "Event-specific description is required when adding an idea to a new event"
+      });
+    }
+
+    const metadataInsertQuery = `
+      INSERT INTO idea_event_metadata (idea_id, event_id, description, technologies, contributors, is_built)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (idea_id, event_id) DO UPDATE SET
+        description = EXCLUDED.description,
+        technologies = EXCLUDED.technologies,
+        is_built = EXCLUDED.is_built
+    `;
+    await pool.query(metadataInsertQuery, [
+      ideaId,
+      event_id,
+      description,
+      technologies || idea.technologies, // can reuse tech stack if not provided
+      '', // empty contributors for new event
+      is_built !== undefined ? is_built : false
+    ]);
+
+    res.status(200).json({ message: "Event added to idea successfully with metadata" });
   } catch (error) {
     console.error("Error adding event to idea:", error);
     res.status(500).json({ message: "Failed to add event to idea" });
@@ -287,14 +315,22 @@ router.get('/with-images', async (req, res) => {
 });
 
 
-// GET ideas by event ID
+// GET ideas by event ID with event-specific metadata
 router.get('/:eventId', async (req, res) => {
   const { eventId } = req.params;
 
   try {
     const query = `
-      SELECT * FROM ideas
-      WHERE (',' || event_id || ',') LIKE '%,' || $1 || ',%'
+      SELECT
+        i.*,
+        COALESCE(m.description, i.description) as description,
+        COALESCE(m.technologies, i.technologies) as technologies,
+        COALESCE(m.contributors, i.contributors) as contributors,
+        COALESCE(m.is_built, i.is_built) as is_built
+      FROM ideas i
+      LEFT JOIN idea_event_metadata m
+        ON i.id = m.idea_id AND m.event_id = $1
+      WHERE (',' || i.event_id || ',') LIKE '%,' || $1 || ',%'
     `;
     const result = await pool.query(query, [eventId]);
     res.status(200).json({ ideas: result.rows });
@@ -378,7 +414,7 @@ router.put('/set-stage/:id', async (req, res) => {
   }
 });
 
-// GET endpoint to fetch a single idea by ID (with support for multiple event_ids)
+// GET endpoint to fetch a single idea by ID (with support for multiple event_ids and event-specific metadata)
 router.get('/idea/:ideaId', async (req, res) => {
   const { ideaId } = req.params;
 
@@ -393,13 +429,30 @@ router.get('/idea/:ideaId', async (req, res) => {
 
     const idea = ideaResult.rows[0];
 
-    // Parse event_ids and fetch related events
+    // Parse event_ids and fetch related events with event-specific metadata
     const eventQuery = `
-      SELECT id, title, event_date
-      FROM events
-      WHERE id = ANY (string_to_array($1, ',')::int[])
+      SELECT
+        e.id as event_id,
+        e.title,
+        e.event_date,
+        COALESCE(m.description, $2) as description,
+        COALESCE(m.technologies, $3) as technologies,
+        COALESCE(m.contributors, $4) as contributors,
+        COALESCE(m.is_built, $5) as is_built
+      FROM events e
+      LEFT JOIN idea_event_metadata m
+        ON e.id = m.event_id AND m.idea_id = $1
+      WHERE e.id = ANY (string_to_array($6, ',')::int[])
+      ORDER BY e.event_date ASC
     `;
-    const eventResult = await pool.query(eventQuery, [idea.event_id]);
+    const eventResult = await pool.query(eventQuery, [
+      ideaId,
+      idea.description,      // fallback for first event
+      idea.technologies,     // fallback for first event
+      idea.contributors,     // fallback for first event
+      idea.is_built,         // fallback for first event
+      idea.event_id
+    ]);
 
     idea.events = eventResult.rows;
 
@@ -411,6 +464,43 @@ router.get('/idea/:ideaId', async (req, res) => {
 });
 
 
+
+// PUT endpoint to update event-specific metadata
+router.put('/update-event-metadata/:ideaId/:eventId', async (req, res) => {
+  const { ideaId, eventId } = req.params;
+  const { description, technologies } = req.body;
+
+  if (!description) {
+    return res.status(400).json({ message: 'Description is required' });
+  }
+
+  try {
+    // Check if this is the first event (no metadata entry exists)
+    const metadataCheck = await pool.query(
+      'SELECT * FROM idea_event_metadata WHERE idea_id = $1 AND event_id = $2',
+      [ideaId, eventId]
+    );
+
+    if (metadataCheck.rowCount === 0) {
+      // This is the first event - update the main ideas table
+      await pool.query(
+        'UPDATE ideas SET description = $1, technologies = $2 WHERE id = $3',
+        [description, technologies, ideaId]
+      );
+    } else {
+      // This is an additional event - update the metadata table
+      await pool.query(
+        'UPDATE idea_event_metadata SET description = $1, technologies = $2 WHERE idea_id = $3 AND event_id = $4',
+        [description, technologies, ideaId, eventId]
+      );
+    }
+
+    res.status(200).json({ message: 'Updated successfully' });
+  } catch (error) {
+    console.error('Error updating event metadata:', error);
+    res.status(500).json({ message: 'Failed to update event metadata' });
+  }
+});
 
 router.put('/:id/add-contributor', async (req, res) => {
   const { id } = req.params;
