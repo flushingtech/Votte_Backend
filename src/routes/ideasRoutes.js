@@ -430,29 +430,69 @@ router.get('/idea/:ideaId', async (req, res) => {
     const idea = ideaResult.rows[0];
 
     // Parse event_ids and fetch related events with event-specific metadata
-    const eventQuery = `
-      SELECT
-        e.id as event_id,
-        e.title,
-        e.event_date,
-        COALESCE(m.description, $2) as description,
-        COALESCE(m.technologies, $3) as technologies,
-        COALESCE(m.contributors, $4) as contributors,
-        COALESCE(m.is_built, $5) as is_built
-      FROM events e
-      LEFT JOIN idea_event_metadata m
-        ON e.id = m.event_id AND m.idea_id = $1
-      WHERE e.id = ANY (string_to_array($6, ',')::int[])
-      ORDER BY e.event_date ASC
-    `;
-    const eventResult = await pool.query(eventQuery, [
-      ideaId,
-      idea.description,      // fallback for first event
-      idea.technologies,     // fallback for first event
-      idea.contributors,     // fallback for first event
-      idea.is_built,         // fallback for first event
-      idea.event_id
-    ]);
+    // Try with image_url, if column doesn't exist yet, catch and retry without it
+    let eventResult;
+    try {
+      const eventQuery = `
+        SELECT
+          e.id as event_id,
+          e.title,
+          e.event_date,
+          COALESCE(m.description, $2) as description,
+          COALESCE(m.technologies, $3) as technologies,
+          COALESCE(m.contributors, $4) as contributors,
+          COALESCE(m.is_built, $5) as is_built,
+          CASE
+            WHEN m.id IS NULL THEN $6
+            ELSE m.image_url
+          END as image_url
+        FROM events e
+        LEFT JOIN idea_event_metadata m
+          ON e.id = m.event_id AND m.idea_id = $1
+        WHERE e.id = ANY (string_to_array($7, ',')::int[])
+        ORDER BY e.event_date ASC
+      `;
+      eventResult = await pool.query(eventQuery, [
+        ideaId,
+        idea.description,
+        idea.technologies,
+        idea.contributors,
+        idea.is_built,
+        idea.image_url || null,
+        idea.event_id
+      ]);
+    } catch (err) {
+      console.error('Error with image_url column, falling back to query without it:', err.message);
+      // Fallback query without image_url column (for backwards compatibility)
+      const eventQueryFallback = `
+        SELECT
+          e.id as event_id,
+          e.title,
+          e.event_date,
+          COALESCE(m.description, $2) as description,
+          COALESCE(m.technologies, $3) as technologies,
+          COALESCE(m.contributors, $4) as contributors,
+          COALESCE(m.is_built, $5) as is_built,
+          CASE
+            WHEN m.id IS NULL THEN $6
+            ELSE NULL
+          END as image_url
+        FROM events e
+        LEFT JOIN idea_event_metadata m
+          ON e.id = m.event_id AND m.idea_id = $1
+        WHERE e.id = ANY (string_to_array($7, ',')::int[])
+        ORDER BY e.event_date ASC
+      `;
+      eventResult = await pool.query(eventQueryFallback, [
+        ideaId,
+        idea.description,
+        idea.technologies,
+        idea.contributors,
+        idea.is_built,
+        idea.image_url || null,
+        idea.event_id
+      ]);
+    }
 
     idea.events = eventResult.rows;
 

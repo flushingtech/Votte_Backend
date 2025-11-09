@@ -131,6 +131,7 @@ export const ideaEventMetadata = pgTable("idea_event_metadata", {
   technologies: text("technologies").notNull(),
   contributors: text("contributors").default(""),
   isBuilt: boolean("is_built").default(false),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
   ideaEventMetadataIdeaIdFkey: foreignKey({
