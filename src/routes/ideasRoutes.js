@@ -315,7 +315,7 @@ router.get('/with-images', async (req, res) => {
 });
 
 
-// GET ideas by event ID with event-specific metadata
+// GET ideas by event ID with event-specific metadata and vote counts
 router.get('/:eventId', async (req, res) => {
   const { eventId } = req.params;
 
@@ -326,10 +326,25 @@ router.get('/:eventId', async (req, res) => {
         COALESCE(m.description, i.description) as description,
         COALESCE(m.technologies, i.technologies) as technologies,
         COALESCE(m.contributors, i.contributors) as contributors,
-        COALESCE(m.is_built, i.is_built) as is_built
+        COALESCE(m.is_built, i.is_built) as is_built,
+        COALESCE(vote_counts.total_votes, 0) as votes,
+        COALESCE(vote_counts.most_creative_votes, 0) as most_creative_votes,
+        COALESCE(vote_counts.most_technical_votes, 0) as most_technical_votes,
+        COALESCE(vote_counts.most_impactful_votes, 0) as most_impactful_votes
       FROM ideas i
       LEFT JOIN idea_event_metadata m
         ON i.id = m.idea_id AND m.event_id = $1
+      LEFT JOIN (
+        SELECT
+          idea_id,
+          COUNT(*) as total_votes,
+          COUNT(*) FILTER (WHERE vote_type = 'Most Creative') as most_creative_votes,
+          COUNT(*) FILTER (WHERE vote_type = 'Most Technical') as most_technical_votes,
+          COUNT(*) FILTER (WHERE vote_type = 'Most Impactful') as most_impactful_votes
+        FROM votes
+        WHERE event_id = $1
+        GROUP BY idea_id
+      ) vote_counts ON i.id = vote_counts.idea_id
       WHERE (',' || i.event_id || ',') LIKE '%,' || $1 || ',%'
     `;
     const result = await pool.query(query, [eventId]);
@@ -448,10 +463,33 @@ router.get('/idea/:ideaId', async (req, res) => {
           CASE
             WHEN m.id IS NULL THEN $6
             ELSE m.image_url
-          END as image_url
+          END as image_url,
+          COALESCE(vote_counts.total_votes, 0) as votes,
+          COALESCE(vote_counts.most_creative_votes, 0) as most_creative_votes,
+          COALESCE(vote_counts.most_technical_votes, 0) as most_technical_votes,
+          COALESCE(vote_counts.most_impactful_votes, 0) as most_impactful_votes,
+          COALESCE(
+            (
+              SELECT json_agg(category)
+              FROM results
+              WHERE event_id = e.id AND winning_idea_id = $1
+            ),
+            '[]'::json
+          ) as awards
         FROM events e
         LEFT JOIN idea_event_metadata m
           ON e.id = m.event_id AND m.idea_id = $1
+        LEFT JOIN (
+          SELECT
+            event_id,
+            COUNT(*) as total_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Creative') as most_creative_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Technical') as most_technical_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Impactful') as most_impactful_votes
+          FROM votes
+          WHERE idea_id = $1
+          GROUP BY event_id
+        ) vote_counts ON e.id = vote_counts.event_id
         WHERE e.id = ANY (string_to_array($7, ',')::int[])
         ORDER BY e.event_date ASC
       `;
@@ -482,10 +520,33 @@ router.get('/idea/:ideaId', async (req, res) => {
           CASE
             WHEN m.id IS NULL THEN $6
             ELSE NULL
-          END as image_url
+          END as image_url,
+          COALESCE(vote_counts.total_votes, 0) as votes,
+          COALESCE(vote_counts.most_creative_votes, 0) as most_creative_votes,
+          COALESCE(vote_counts.most_technical_votes, 0) as most_technical_votes,
+          COALESCE(vote_counts.most_impactful_votes, 0) as most_impactful_votes,
+          COALESCE(
+            (
+              SELECT json_agg(category)
+              FROM results
+              WHERE event_id = e.id AND winning_idea_id = $1
+            ),
+            '[]'::json
+          ) as awards
         FROM events e
         LEFT JOIN idea_event_metadata m
           ON e.id = m.event_id AND m.idea_id = $1
+        LEFT JOIN (
+          SELECT
+            event_id,
+            COUNT(*) as total_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Creative') as most_creative_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Technical') as most_technical_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Impactful') as most_impactful_votes
+          FROM votes
+          WHERE idea_id = $1
+          GROUP BY event_id
+        ) vote_counts ON e.id = vote_counts.event_id
         WHERE e.id = ANY (string_to_array($7, ',')::int[])
         ORDER BY e.event_date ASC
       `;

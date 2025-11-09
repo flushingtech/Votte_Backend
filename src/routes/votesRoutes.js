@@ -46,14 +46,19 @@ router.post('/vote', async (req, res) => {
 
 router.get('/votes/idea/:idea_id', async (req, res) => {
   const { idea_id } = req.params;
-  const { vote_type } = req.query; // Optional filter by vote type
+  const { vote_type, event_id } = req.query; // Optional filters by vote type and event
 
   try {
     let fetchVotesQuery = `SELECT * FROM votes WHERE idea_id = $1`;
     let queryParams = [idea_id];
 
+    if (event_id) {
+      fetchVotesQuery += ` AND event_id = $${queryParams.length + 1}`;
+      queryParams.push(event_id);
+    }
+
     if (vote_type) {
-      fetchVotesQuery += ` AND vote_type = $2`;
+      fetchVotesQuery += ` AND vote_type = $${queryParams.length + 1}`;
       queryParams.push(vote_type);
     }
 
@@ -118,15 +123,21 @@ router.get('/user-vote', async (req, res) => {
 });
 
 
-// Get all votes for an idea
+// Get all votes for an idea (with optional event filter)
 router.get('/idea/:idea_id', async (req, res) => {
   const { idea_id } = req.params;
+  const { event_id } = req.query;
 
   try {
-    const fetchVotesQuery = `
-      SELECT * FROM votes WHERE idea_id = $1;
-    `;
-    const result = await pool.query(fetchVotesQuery, [idea_id]);
+    let fetchVotesQuery = `SELECT * FROM votes WHERE idea_id = $1`;
+    let queryParams = [idea_id];
+
+    if (event_id) {
+      fetchVotesQuery += ` AND event_id = $2`;
+      queryParams.push(event_id);
+    }
+
+    const result = await pool.query(fetchVotesQuery, queryParams);
     res.status(200).json({ votes: result.rows });
   } catch (error) {
     console.error('Error fetching votes for idea:', error);
