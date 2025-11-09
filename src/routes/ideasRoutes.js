@@ -440,8 +440,11 @@ router.get('/idea/:ideaId', async (req, res) => {
           e.event_date,
           COALESCE(m.description, $2) as description,
           COALESCE(m.technologies, $3) as technologies,
-          COALESCE(m.contributors, $4) as contributors,
-          COALESCE(m.is_built, $5) as is_built,
+          COALESCE(m.is_built, $4) as is_built,
+          CASE
+            WHEN m.id IS NULL THEN $5
+            ELSE m.contributors
+          END as contributors,
           CASE
             WHEN m.id IS NULL THEN $6
             ELSE m.image_url
@@ -456,8 +459,8 @@ router.get('/idea/:ideaId', async (req, res) => {
         ideaId,
         idea.description,
         idea.technologies,
-        idea.contributors,
         idea.is_built,
+        idea.contributors || '',
         idea.image_url || null,
         idea.event_id
       ]);
@@ -471,8 +474,11 @@ router.get('/idea/:ideaId', async (req, res) => {
           e.event_date,
           COALESCE(m.description, $2) as description,
           COALESCE(m.technologies, $3) as technologies,
-          COALESCE(m.contributors, $4) as contributors,
-          COALESCE(m.is_built, $5) as is_built,
+          COALESCE(m.is_built, $4) as is_built,
+          CASE
+            WHEN m.id IS NULL THEN $5
+            ELSE m.contributors
+          END as contributors,
           CASE
             WHEN m.id IS NULL THEN $6
             ELSE NULL
@@ -487,8 +493,8 @@ router.get('/idea/:ideaId', async (req, res) => {
         ideaId,
         idea.description,
         idea.technologies,
-        idea.contributors,
         idea.is_built,
+        idea.contributors || '',
         idea.image_url || null,
         idea.event_id
       ]);
@@ -589,6 +595,75 @@ router.put('/:id/add-contributor', async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding contributor:', error);
+    res.status(500).json({ message: 'Failed to add contributor', error: error.message });
+  }
+});
+
+// PUT endpoint to add contributor per event
+router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
+  const { ideaId, eventId } = req.params;
+  const { contributor_email } = req.body;
+
+  if (!contributor_email) {
+    return res.status(400).json({ message: 'Missing contributor email' });
+  }
+
+  try {
+    // Check if metadata exists for this idea+event combination
+    const metadataCheck = await pool.query(
+      'SELECT contributors FROM idea_event_metadata WHERE idea_id = $1 AND event_id = $2',
+      [ideaId, eventId]
+    );
+
+    let contributorsArray = [];
+    let existingContributors = '';
+
+    if (metadataCheck.rowCount === 0) {
+      // First event - get from ideas table
+      const ideaCheck = await pool.query('SELECT contributors FROM ideas WHERE id = $1', [ideaId]);
+      if (ideaCheck.rowCount === 0) {
+        return res.status(404).json({ message: 'Idea not found' });
+      }
+      existingContributors = ideaCheck.rows[0].contributors || '';
+    } else {
+      // Additional event - get from metadata table
+      existingContributors = metadataCheck.rows[0].contributors || '';
+    }
+
+    // Remove any "{}" placeholder and parse existing contributors
+    existingContributors = existingContributors.replace(/{}/g, '').trim();
+    contributorsArray = existingContributors.length > 0 ? existingContributors.split(',').map(c => c.trim()) : [];
+
+    // Check for duplicates
+    if (contributorsArray.includes(contributor_email)) {
+      return res.status(400).json({ message: 'Contributor already added' });
+    }
+
+    // Add new contributor
+    contributorsArray.push(contributor_email);
+    const updatedContributors = contributorsArray.join(',');
+
+    // Update the appropriate table
+    if (metadataCheck.rowCount === 0) {
+      // First event - update ideas table
+      await pool.query(
+        'UPDATE ideas SET contributors = $1 WHERE id = $2',
+        [updatedContributors, ideaId]
+      );
+    } else {
+      // Additional event - update metadata table
+      await pool.query(
+        'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+        [updatedContributors, ideaId, eventId]
+      );
+    }
+
+    res.status(200).json({
+      message: 'Contributor added successfully!',
+      contributors: updatedContributors
+    });
+  } catch (error) {
+    console.error('Error adding contributor to event:', error);
     res.status(500).json({ message: 'Failed to add contributor', error: error.message });
   }
 });
