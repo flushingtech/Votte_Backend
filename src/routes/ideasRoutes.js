@@ -315,7 +315,7 @@ router.get('/with-images', async (req, res) => {
 });
 
 
-// GET ideas by event ID with event-specific metadata
+// GET ideas by event ID with event-specific metadata and vote counts
 router.get('/:eventId', async (req, res) => {
   const { eventId } = req.params;
 
@@ -326,10 +326,25 @@ router.get('/:eventId', async (req, res) => {
         COALESCE(m.description, i.description) as description,
         COALESCE(m.technologies, i.technologies) as technologies,
         COALESCE(m.contributors, i.contributors) as contributors,
-        COALESCE(m.is_built, i.is_built) as is_built
+        COALESCE(m.is_built, i.is_built) as is_built,
+        COALESCE(vote_counts.total_votes, 0) as votes,
+        COALESCE(vote_counts.most_creative_votes, 0) as most_creative_votes,
+        COALESCE(vote_counts.most_technical_votes, 0) as most_technical_votes,
+        COALESCE(vote_counts.most_impactful_votes, 0) as most_impactful_votes
       FROM ideas i
       LEFT JOIN idea_event_metadata m
         ON i.id = m.idea_id AND m.event_id = $1
+      LEFT JOIN (
+        SELECT
+          idea_id,
+          COUNT(*) as total_votes,
+          COUNT(*) FILTER (WHERE vote_type = 'Most Creative') as most_creative_votes,
+          COUNT(*) FILTER (WHERE vote_type = 'Most Technical') as most_technical_votes,
+          COUNT(*) FILTER (WHERE vote_type = 'Most Impactful') as most_impactful_votes
+        FROM votes
+        WHERE event_id = $1
+        GROUP BY idea_id
+      ) vote_counts ON i.id = vote_counts.idea_id
       WHERE (',' || i.event_id || ',') LIKE '%,' || $1 || ',%'
     `;
     const result = await pool.query(query, [eventId]);
@@ -430,29 +445,121 @@ router.get('/idea/:ideaId', async (req, res) => {
     const idea = ideaResult.rows[0];
 
     // Parse event_ids and fetch related events with event-specific metadata
-    const eventQuery = `
-      SELECT
-        e.id as event_id,
-        e.title,
-        e.event_date,
-        COALESCE(m.description, $2) as description,
-        COALESCE(m.technologies, $3) as technologies,
-        COALESCE(m.contributors, $4) as contributors,
-        COALESCE(m.is_built, $5) as is_built
-      FROM events e
-      LEFT JOIN idea_event_metadata m
-        ON e.id = m.event_id AND m.idea_id = $1
-      WHERE e.id = ANY (string_to_array($6, ',')::int[])
-      ORDER BY e.event_date ASC
-    `;
-    const eventResult = await pool.query(eventQuery, [
-      ideaId,
-      idea.description,      // fallback for first event
-      idea.technologies,     // fallback for first event
-      idea.contributors,     // fallback for first event
-      idea.is_built,         // fallback for first event
-      idea.event_id
-    ]);
+    // Try with image_url, if column doesn't exist yet, catch and retry without it
+    let eventResult;
+    try {
+      const eventQuery = `
+        SELECT
+          e.id as event_id,
+          e.title,
+          e.event_date,
+          COALESCE(m.description, $2) as description,
+          COALESCE(m.technologies, $3) as technologies,
+          COALESCE(m.is_built, $4) as is_built,
+          CASE
+            WHEN m.id IS NULL THEN $5
+            ELSE m.contributors
+          END as contributors,
+          CASE
+            WHEN m.id IS NULL THEN $6
+            ELSE m.image_url
+          END as image_url,
+          COALESCE(vote_counts.total_votes, 0) as votes,
+          COALESCE(vote_counts.most_creative_votes, 0) as most_creative_votes,
+          COALESCE(vote_counts.most_technical_votes, 0) as most_technical_votes,
+          COALESCE(vote_counts.most_impactful_votes, 0) as most_impactful_votes,
+          COALESCE(
+            (
+              SELECT json_agg(category)
+              FROM results
+              WHERE event_id = e.id AND winning_idea_id = $1
+            ),
+            '[]'::json
+          ) as awards
+        FROM events e
+        LEFT JOIN idea_event_metadata m
+          ON e.id = m.event_id AND m.idea_id = $1
+        LEFT JOIN (
+          SELECT
+            event_id,
+            COUNT(*) as total_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Creative') as most_creative_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Technical') as most_technical_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Impactful') as most_impactful_votes
+          FROM votes
+          WHERE idea_id = $1
+          GROUP BY event_id
+        ) vote_counts ON e.id = vote_counts.event_id
+        WHERE e.id = ANY (string_to_array($7, ',')::int[])
+        ORDER BY e.event_date ASC
+      `;
+      eventResult = await pool.query(eventQuery, [
+        ideaId,
+        idea.description,
+        idea.technologies,
+        idea.is_built,
+        idea.contributors || '',
+        idea.image_url || null,
+        idea.event_id
+      ]);
+    } catch (err) {
+      console.error('Error with image_url column, falling back to query without it:', err.message);
+      // Fallback query without image_url column (for backwards compatibility)
+      const eventQueryFallback = `
+        SELECT
+          e.id as event_id,
+          e.title,
+          e.event_date,
+          COALESCE(m.description, $2) as description,
+          COALESCE(m.technologies, $3) as technologies,
+          COALESCE(m.is_built, $4) as is_built,
+          CASE
+            WHEN m.id IS NULL THEN $5
+            ELSE m.contributors
+          END as contributors,
+          CASE
+            WHEN m.id IS NULL THEN $6
+            ELSE NULL
+          END as image_url,
+          COALESCE(vote_counts.total_votes, 0) as votes,
+          COALESCE(vote_counts.most_creative_votes, 0) as most_creative_votes,
+          COALESCE(vote_counts.most_technical_votes, 0) as most_technical_votes,
+          COALESCE(vote_counts.most_impactful_votes, 0) as most_impactful_votes,
+          COALESCE(
+            (
+              SELECT json_agg(category)
+              FROM results
+              WHERE event_id = e.id AND winning_idea_id = $1
+            ),
+            '[]'::json
+          ) as awards
+        FROM events e
+        LEFT JOIN idea_event_metadata m
+          ON e.id = m.event_id AND m.idea_id = $1
+        LEFT JOIN (
+          SELECT
+            event_id,
+            COUNT(*) as total_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Creative') as most_creative_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Technical') as most_technical_votes,
+            COUNT(*) FILTER (WHERE vote_type = 'Most Impactful') as most_impactful_votes
+          FROM votes
+          WHERE idea_id = $1
+          GROUP BY event_id
+        ) vote_counts ON e.id = vote_counts.event_id
+        WHERE e.id = ANY (string_to_array($7, ',')::int[])
+        ORDER BY e.event_date ASC
+      `;
+      eventResult = await pool.query(eventQueryFallback, [
+        ideaId,
+        idea.description,
+        idea.technologies,
+        idea.is_built,
+        idea.contributors || '',
+        idea.image_url || null,
+        idea.event_id
+      ]);
+    }
 
     idea.events = eventResult.rows;
 
@@ -549,6 +656,75 @@ router.put('/:id/add-contributor', async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding contributor:', error);
+    res.status(500).json({ message: 'Failed to add contributor', error: error.message });
+  }
+});
+
+// PUT endpoint to add contributor per event
+router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
+  const { ideaId, eventId } = req.params;
+  const { contributor_email } = req.body;
+
+  if (!contributor_email) {
+    return res.status(400).json({ message: 'Missing contributor email' });
+  }
+
+  try {
+    // Check if metadata exists for this idea+event combination
+    const metadataCheck = await pool.query(
+      'SELECT contributors FROM idea_event_metadata WHERE idea_id = $1 AND event_id = $2',
+      [ideaId, eventId]
+    );
+
+    let contributorsArray = [];
+    let existingContributors = '';
+
+    if (metadataCheck.rowCount === 0) {
+      // First event - get from ideas table
+      const ideaCheck = await pool.query('SELECT contributors FROM ideas WHERE id = $1', [ideaId]);
+      if (ideaCheck.rowCount === 0) {
+        return res.status(404).json({ message: 'Idea not found' });
+      }
+      existingContributors = ideaCheck.rows[0].contributors || '';
+    } else {
+      // Additional event - get from metadata table
+      existingContributors = metadataCheck.rows[0].contributors || '';
+    }
+
+    // Remove any "{}" placeholder and parse existing contributors
+    existingContributors = existingContributors.replace(/{}/g, '').trim();
+    contributorsArray = existingContributors.length > 0 ? existingContributors.split(',').map(c => c.trim()) : [];
+
+    // Check for duplicates
+    if (contributorsArray.includes(contributor_email)) {
+      return res.status(400).json({ message: 'Contributor already added' });
+    }
+
+    // Add new contributor
+    contributorsArray.push(contributor_email);
+    const updatedContributors = contributorsArray.join(',');
+
+    // Update the appropriate table
+    if (metadataCheck.rowCount === 0) {
+      // First event - update ideas table
+      await pool.query(
+        'UPDATE ideas SET contributors = $1 WHERE id = $2',
+        [updatedContributors, ideaId]
+      );
+    } else {
+      // Additional event - update metadata table
+      await pool.query(
+        'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+        [updatedContributors, ideaId, eventId]
+      );
+    }
+
+    res.status(200).json({
+      message: 'Contributor added successfully!',
+      contributors: updatedContributors
+    });
+  } catch (error) {
+    console.error('Error adding contributor to event:', error);
     res.status(500).json({ message: 'Failed to add contributor', error: error.message });
   }
 });
