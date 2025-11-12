@@ -14,7 +14,7 @@ router.get('/all-users', async (req, res) => {
 });
 
 
-// GET the date a user joined via email
+// GET the date a user joined via email list
 router.get('/join-date/:email', async (req, res) => {
     const { email } = req.params;
     if (!email) {
