@@ -65,10 +65,7 @@ async function fetchRssAndAddEvents() {
         // Skip events before June 13, 2025
         const june13 = new Date("2025-06-13");
         if (eventDate < june13) continue;
-  
-        // Bump date by 1 day
-        eventDate.setDate(eventDate.getDate() + 1);
-  
+
         const dateOnly = eventDate.toISOString().split("T")[0];
   
         const easternMidnight = new Date(
@@ -140,13 +137,9 @@ router.post("/add-event", async (req, res) => {
         return res.status(403).json({ message: "Unauthorized" });
       }
   
-      // Add 1 day to the input date
-      const adjustedDate = new Date(eventDate);
-      adjustedDate.setDate(adjustedDate.getDate() + 1);
-  
       // Convert to Eastern Time midnight and shift to UTC
       const easternMidnight = new Date(
-        new Date(`${adjustedDate.toISOString().split("T")[0]}T00:00:00-04:00`).toISOString()
+        new Date(`${new Date(eventDate).toISOString().split("T")[0]}T00:00:00-04:00`).toISOString()
       );
   
       const result = await pool.query(
