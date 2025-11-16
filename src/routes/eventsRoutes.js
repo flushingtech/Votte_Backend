@@ -108,13 +108,10 @@ async function fetchRssAndAddEvents() {
   
 
 
-// Ensure this function runs when `/all-events` is called
+// Get all events from database
 router.get("/all-events", async (req, res) => {
     try {
-        // First, fetch RSS feed and add events to the database
-        await fetchRssAndAddEvents();
-
-        // Then, retrieve events from the database
+        // Retrieve events from the database
         const dbEvents = await pool.query(
             "SELECT * FROM events ORDER BY event_date ASC"
         );
@@ -122,6 +119,29 @@ router.get("/all-events", async (req, res) => {
     } catch (error) {
         console.error("Error fetching events:", error.message);
         res.status(500).json({ message: "Error fetching events" });
+    }
+});
+
+// Sync events from Meetup RSS (admin only)
+router.post("/sync-meetup-events", async (req, res) => {
+    const { email } = req.body;
+    try {
+        // Check if user is admin
+        const adminResult = await pool.query(
+            "SELECT email FROM admin WHERE email = $1",
+            [email]
+        );
+        if (adminResult.rowCount === 0) {
+            return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        // Sync from Meetup RSS
+        await fetchRssAndAddEvents();
+
+        res.json({ message: "Successfully synced events from Meetup" });
+    } catch (error) {
+        console.error("Error syncing Meetup events:", error.message);
+        res.status(500).json({ message: "Failed to sync events" });
     }
 });
 
