@@ -15,6 +15,28 @@ services:
       retries: 5
       start_period: 30s
       timeout: 10s
+      
+# ADD THIS NEW SERVICE FOR YOUR NODE.JS BACKEND
+  backend:
+    build: . # This tells Docker to build an image from your current directory (where your Dockerfile should be)
+    ports:
+      - "5500:5500" # Expose your server port (adjust if your app uses a different port)
+    environment:
+      # Pass environment variables from your .env file into the container
+      # Codespaces will automatically pick up .env variables here.
+      # Alternatively, you can explicitly list them if not using Codespaces' auto-loading
+      DATABASE_URL: postgresql://postgres:mysecretpassword@db:5432/mydatabase?sslmode=disable # <--- Ensure this matches your .env and db service
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID} # Pass from .env
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET} # Pass from .env
+      JWT_SECRET: ${JWT_SECRET} # Pass from .env
+      SERVER_URL: ${SERVER_URL} # Pass from .env
+    depends_on:
+      db:
+        condition: service_healthy # Ensure db is healthy before starting backend
+    # command: npm start # Or whatever command starts your server (e.g., node index.js)
+    # The default command in your Dockerfile will usually be `npm start`
+    volumes:
+      - .:/app # Mount current directory into the container for live updates (optional but useful for dev)
 
 volumes:
   postgres_db:
