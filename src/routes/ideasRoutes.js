@@ -50,10 +50,10 @@ router.post('/submitIdea', async (req, res) => {
 router.get('/previous-projects', async (req, res) => {
   try {
     const ideasQuery = `
-      SELECT 
+      SELECT
         ideas.id,
-        ideas.idea, 
-        ideas.contributors, 
+        ideas.idea,
+        ideas.contributors,
         events.title AS event_title,
         events.event_date
       FROM ideas
@@ -66,6 +66,30 @@ router.get('/previous-projects', async (req, res) => {
   } catch (error) {
     console.error('Error fetching previous projects:', error);
     res.status(500).json({ message: 'Failed to fetch previous projects' });
+  }
+});
+
+router.get('/archived-projects', async (req, res) => {
+  try {
+    const ideasQuery = `
+      SELECT
+        ideas.id,
+        ideas.idea,
+        ideas.contributors,
+        ideas.technologies,
+        ideas.is_built,
+        events.title AS event_title,
+        events.event_date
+      FROM ideas
+      JOIN events ON ideas.event_id = events.id::text
+      WHERE events.stage = 3 AND (ideas.stage IS NULL OR ideas.stage = 1)
+      ORDER BY events.event_date DESC, ideas.created_at DESC;
+    `;
+    const { rows } = await pool.query(ideasQuery);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching archived projects:', error);
+    res.status(500).json({ message: 'Failed to fetch archived projects' });
   }
 });
 
