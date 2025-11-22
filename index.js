@@ -18,9 +18,8 @@ const pool = require('./db');  // PostgreSQL connection
 require('./src/auth');         // Google OAuth setup
 
 const app = express();
-app.use(express.json());
 
-// CORS Configuration
+// CORS Configuration - Must be BEFORE express.json()
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests from your frontend domains
@@ -39,12 +38,19 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Length', 'Content-Type']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
+app.use(express.json());
 
 // Route registrations
 app.use('/', authRoutes);
