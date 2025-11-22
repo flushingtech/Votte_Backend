@@ -17,13 +17,21 @@ router.post('/submitIdea', async (req, res) => {
       return res.status(400).json({ message: 'Invalid event ID' });
     }
 
-    // Count user's ideas for THIS specific event
-    const ideasCountQuery = 'SELECT COUNT(*) FROM ideas WHERE email = $1 AND event_id = $2';
-    const ideasCountResult = await pool.query(ideasCountQuery, [email, event_id]);
-    const ideasCount = parseInt(ideasCountResult.rows[0].count, 10);
+    // Check if user is an admin
+    const adminCheckQuery = 'SELECT * FROM admin WHERE email = $1';
+    const adminCheckResult = await pool.query(adminCheckQuery, [email]);
+    const isAdmin = adminCheckResult.rowCount > 0;
 
-    if (ideasCount >= MAX_IDEAS_PER_USER) {
-      return res.status(400).json({ message: `You can only submit up to ${MAX_IDEAS_PER_USER} ideas per event.` });
+    // Only enforce limit for non-admin users
+    if (!isAdmin) {
+      // Count user's ideas for THIS specific event
+      const ideasCountQuery = 'SELECT COUNT(*) FROM ideas WHERE email = $1 AND event_id = $2';
+      const ideasCountResult = await pool.query(ideasCountQuery, [email, event_id]);
+      const ideasCount = parseInt(ideasCountResult.rows[0].count, 10);
+
+      if (ideasCount >= MAX_IDEAS_PER_USER) {
+        return res.status(400).json({ message: `You can only submit up to ${MAX_IDEAS_PER_USER} ideas per event.` });
+      }
     }
 
     // Insert new idea - only in ideas table for first event
