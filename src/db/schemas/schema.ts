@@ -42,6 +42,7 @@ export const ideas = pgTable("ideas", {
   averageScore: doublePrecision("average_score").default(0),
   contributors: text("contributors").default(""),
   imageUrl: text("image_url"),
+  githubRepo: text("github_repo"),
 });
 
 export const likes = pgTable(

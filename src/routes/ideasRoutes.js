@@ -5,9 +5,9 @@ const router = express.Router();
 const MAX_IDEAS_PER_USER = 5;
 
 router.post('/submitIdea', async (req, res) => {
-  const { email, idea, description, technologies, event_id, is_built = false } = req.body;
+  const { email, idea, description, technologies, event_id, is_built = false, github_repo } = req.body;
 
-  console.log('Received idea submission:', { email, idea, description, technologies, event_id, is_built });
+  console.log('Received idea submission:', { email, idea, description, technologies, event_id, is_built, github_repo });
 
   try {
     // Check if event exists
@@ -28,10 +28,10 @@ router.post('/submitIdea', async (req, res) => {
 
     // Insert new idea - only in ideas table for first event
     const insertQuery = `
-      INSERT INTO ideas (email, idea, description, technologies, event_id, is_built)
-      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+      INSERT INTO ideas (email, idea, description, technologies, event_id, is_built, github_repo)
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
     `;
-    const result = await pool.query(insertQuery, [email, idea, description, technologies, event_id, is_built]);
+    const result = await pool.query(insertQuery, [email, idea, description, technologies, event_id, is_built, github_repo]);
 
     const newIdea = result.rows[0];
 
@@ -176,18 +176,18 @@ router.get('/allIdeas', async (req, res) => {
 // PUT endpoint to edit an existing idea
 router.put('/editIdea/:id', async (req, res) => {
   const { id } = req.params;
-  const { idea, description, technologies } = req.body;
+  const { idea, description, technologies, github_repo } = req.body;
 
-  console.log(`Editing idea ID ${id} with new data:`, { idea, description, technologies });
+  console.log(`Editing idea ID ${id} with new data:`, { idea, description, technologies, github_repo });
 
   try {
     const updateQuery = `
       UPDATE ideas
-      SET idea = $1, description = $2, technologies = $3, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $4
+      SET idea = $1, description = $2, technologies = $3, github_repo = $4, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5
       RETURNING *;
     `;
-    const result = await pool.query(updateQuery, [idea, description, technologies, id]);
+    const result = await pool.query(updateQuery, [idea, description, technologies, github_repo, id]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Idea not found' });
