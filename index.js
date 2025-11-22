@@ -71,15 +71,21 @@ app.get('/', (req, res) => {
 app.use((err, req, res, next) => {
     if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
-            return res.status(400).json({ message: "File size too large (2 MB+ not allowed)" });
+            return res.status(400).json({ message: "File size too large. Maximum 4MB per file allowed." });
         }
         if (err.code === "LIMIT_FILE_COUNT") {
-            return res.status(400).json({ message: "Only 3 files per operation allowed" });
+            return res.status(400).json({ message: "Too many files. Only 3 files per upload allowed." });
         }
         if (err.code === "LIMIT_UNEXPECTED_FILE") {
-            return res.status(400).json({ message: "Unsupported file format" });
+            return res.status(400).json({ message: "Unsupported file format. Only PNG, JPG, JPEG, GIF, and WebP allowed." });
         }
     }
+
+    // Handle body size limit errors
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ message: "File too large. Please upload images smaller than 4MB." });
+    }
+
     next(err);
 });
 

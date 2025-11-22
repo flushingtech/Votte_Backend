@@ -15,9 +15,9 @@ const upload = multer({
     callback(null, true);
   },
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: 4 * 1024 * 1024, // 4MB per file (safe for Vercel)
     files: 3,
-    fieldSize: 25 * 1024 * 1024
+    fieldSize: 10 * 1024 * 1024 // 10MB total field size
   }
 }).array('uploadImages');
 
