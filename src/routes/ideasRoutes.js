@@ -1260,6 +1260,8 @@ router.get('/admin/all-projects', async (req, res) => {
         i.email,
         i.likes,
         i.featured,
+        i.technologies,
+        i.image_url,
         i.created_at,
         e.id as event_id,
         e.title as event_title,
@@ -1282,7 +1284,10 @@ router.get('/admin/all-projects', async (req, res) => {
           email: row.email,
           likes: row.likes,
           featured: row.featured,
+          technologies: row.technologies,
+          image_url: row.image_url,
           created_at: row.created_at,
+          event_id: row.event_id,
           event_title: row.event_title,
           event_date: row.event_date
         });
@@ -1290,6 +1295,7 @@ router.get('/admin/all-projects', async (req, res) => {
         // Keep the earliest event date
         const existing = projectsMap.get(row.id);
         if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
+          existing.event_id = row.event_id;
           existing.event_title = row.event_title;
           existing.event_date = row.event_date;
         }
@@ -1365,6 +1371,7 @@ router.get('/featured-projects', async (req, res) => {
           technologies: row.technologies,
           image_url: row.image_url,
           github_repo: row.github_repo,
+          event_id: row.event_id,
           event_title: row.event_title,
           event_date: row.event_date
         });
@@ -1372,6 +1379,7 @@ router.get('/featured-projects', async (req, res) => {
         // Keep the earliest event date
         const existing = projectsMap.get(row.id);
         if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
+          existing.event_id = row.event_id;
           existing.event_title = row.event_title;
           existing.event_date = row.event_date;
         }
