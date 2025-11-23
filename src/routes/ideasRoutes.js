@@ -1106,9 +1106,22 @@ router.get('/contributed/:email', async (req, res) => {
   console.log(`📢 Fetching contributed ideas for: ${email}`);
 
   try {
-    const query = `
+    const queryWithImages = `
       SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
-             events.title AS event_title, ideas.is_built, ideas.event_id
+             events.title AS event_title, ideas.is_built, ideas.event_id,
+             COALESCE(m.image_url, ideas.image_url) AS image_url
+      FROM ideas
+      INNER JOIN events ON (',' || ideas.event_id || ',') LIKE '%,' || events.id::text || ',%'
+      LEFT JOIN idea_event_metadata m
+        ON m.idea_id = ideas.id AND m.event_id = events.id
+      WHERE contributors LIKE '%' || $1 || '%'
+      ORDER BY ideas.created_at DESC;
+    `;
+
+    const queryFallback = `
+      SELECT ideas.id, ideas.idea, ideas.description, ideas.technologies, ideas.likes, ideas.created_at, 
+             events.title AS event_title, ideas.is_built, ideas.event_id,
+             ideas.image_url
       FROM ideas
       INNER JOIN events ON (',' || ideas.event_id || ',') LIKE '%,' || events.id::text || ',%'
       WHERE contributors LIKE '%' || $1 || '%'
@@ -1116,7 +1129,13 @@ router.get('/contributed/:email', async (req, res) => {
     `;
 
     console.log(`📢 Running query with email: ${email}`);
-    const result = await pool.query(query, [email]);
+    let result;
+    try {
+      result = await pool.query(queryWithImages, [email]);
+    } catch (err) {
+      console.warn('Falling back to contributed query without metadata image_url:', err.message);
+      result = await pool.query(queryFallback, [email]);
+    }
 
     console.log(`✅ Contributed ideas found:`, result.rows);
     res.status(200).json({ ideas: result.rows });
