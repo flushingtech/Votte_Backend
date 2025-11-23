@@ -493,35 +493,23 @@ router.put('/admin/toggle-featured/:id', async (req, res) => {
   }
 });
 
-// GET leaderboard - users ranked by hackathon wins
+// GET leaderboard - users ranked by hackathon wins (contributors only)
 router.get('/leaderboard', async (req, res) => {
   try {
     const query = `
-      WITH user_wins AS (
+      WITH contributor_wins AS (
         SELECT
-          i.email,
-          COUNT(*) as wins
-        FROM results r
-        JOIN ideas i ON r.winning_idea_id = i.id
-        WHERE r.category = 'Hackathon Winner'
-        GROUP BY i.email
-
-        UNION ALL
-
-        SELECT
-          TRIM(unnest(string_to_array(i.contributors, ','))) as email,
-          COUNT(*) as wins
+          TRIM(unnest(string_to_array(i.contributors, ','))) as email
         FROM results r
         JOIN ideas i ON r.winning_idea_id = i.id
         WHERE r.category = 'Hackathon Winner'
         AND i.contributors IS NOT NULL
         AND i.contributors != ''
-        GROUP BY TRIM(unnest(string_to_array(i.contributors, ',')))
       )
       SELECT
         email,
-        SUM(wins) as total_wins
-      FROM user_wins
+        COUNT(*) as total_wins
+      FROM contributor_wins
       WHERE email IS NOT NULL AND email != ''
       GROUP BY email
       ORDER BY total_wins DESC, email ASC
