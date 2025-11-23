@@ -379,6 +379,210 @@ router.get('/with-images', async (req, res) => {
   }
 });
 
+// GET endpoint to get all projects for admin
+router.get('/admin/all-projects', async (req, res) => {
+  try {
+    // First get all ideas
+    const ideasQuery = `
+      SELECT
+        id,
+        idea,
+        description,
+        email,
+        likes,
+        featured,
+        technologies,
+        image_url,
+        event_id,
+        created_at
+      FROM ideas
+      ORDER BY created_at DESC
+    `;
+
+    const ideasResult = await pool.query(ideasQuery);
+
+    if (!ideasResult.rows || ideasResult.rows.length === 0) {
+      return res.status(200).json({ projects: [] });
+    }
+
+    // Get all unique event IDs
+    const eventIds = new Set();
+    ideasResult.rows.forEach(row => {
+      if (row.event_id && row.event_id.trim() !== '') {
+        const ids = row.event_id.split(',').map(id => id.trim()).filter(id => id);
+        ids.forEach(id => eventIds.add(parseInt(id)));
+      }
+    });
+
+    // Get event details
+    let eventsMap = new Map();
+    if (eventIds.size > 0) {
+      const eventsQuery = `
+        SELECT id, title, event_date
+        FROM events
+        WHERE id = ANY($1)
+      `;
+      const eventsResult = await pool.query(eventsQuery, [Array.from(eventIds)]);
+      eventsResult.rows.forEach(event => {
+        eventsMap.set(event.id, event);
+      });
+    }
+
+    // Combine data
+    const projects = ideasResult.rows.map(row => {
+      let eventTitle = 'Unknown Event';
+      let eventDate = null;
+      let firstEventId = null;
+
+      if (row.event_id && row.event_id.trim() !== '') {
+        const ids = row.event_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (ids.length > 0) {
+          // Get the first event
+          firstEventId = ids[0];
+          const event = eventsMap.get(firstEventId);
+          if (event) {
+            eventTitle = event.title;
+            eventDate = event.event_date;
+          }
+        }
+      }
+
+      return {
+        id: row.id,
+        idea: row.idea,
+        description: row.description || '',
+        email: row.email,
+        likes: row.likes || 0,
+        featured: row.featured || false,
+        technologies: row.technologies || '',
+        image_url: row.image_url || null,
+        created_at: row.created_at,
+        event_id: firstEventId,
+        event_title: eventTitle,
+        event_date: eventDate
+      };
+    });
+
+    res.status(200).json({ projects });
+  } catch (error) {
+    console.error('Error fetching all projects:', error);
+    res.status(500).json({ message: 'Failed to fetch projects', error: error.message });
+  }
+});
+
+// PUT endpoint to toggle featured status
+router.put('/admin/toggle-featured/:id', async (req, res) => {
+  const { id } = req.params;
+  const { featured } = req.body;
+
+  try {
+    const updateQuery = 'UPDATE ideas SET featured = $1 WHERE id = $2 RETURNING *';
+    const result = await pool.query(updateQuery, [featured, id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+
+    res.status(200).json({
+      message: `Project ${featured ? 'featured' : 'unfeatured'} successfully`,
+      idea: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error toggling featured status:', error);
+    res.status(500).json({ message: 'Failed to update featured status', error: error.message });
+  }
+});
+
+// GET endpoint to get featured projects
+router.get('/featured-projects', async (req, res) => {
+  try {
+    // First get all featured ideas
+    const ideasQuery = `
+      SELECT
+        id,
+        idea,
+        description,
+        email,
+        likes,
+        technologies,
+        image_url,
+        github_repo,
+        event_id,
+        created_at
+      FROM ideas
+      WHERE featured = true
+      ORDER BY created_at DESC
+    `;
+
+    const ideasResult = await pool.query(ideasQuery);
+
+    if (!ideasResult.rows || ideasResult.rows.length === 0) {
+      return res.status(200).json({ projects: [] });
+    }
+
+    // Get all unique event IDs
+    const eventIds = new Set();
+    ideasResult.rows.forEach(row => {
+      if (row.event_id && row.event_id.trim() !== '') {
+        const ids = row.event_id.split(',').map(id => id.trim()).filter(id => id);
+        ids.forEach(id => eventIds.add(parseInt(id)));
+      }
+    });
+
+    // Get event details
+    let eventsMap = new Map();
+    if (eventIds.size > 0) {
+      const eventsQuery = `
+        SELECT id, title, event_date
+        FROM events
+        WHERE id = ANY($1)
+      `;
+      const eventsResult = await pool.query(eventsQuery, [Array.from(eventIds)]);
+      eventsResult.rows.forEach(event => {
+        eventsMap.set(event.id, event);
+      });
+    }
+
+    // Combine data
+    const projects = ideasResult.rows.map(row => {
+      let eventTitle = 'Unknown Event';
+      let eventDate = null;
+      let firstEventId = null;
+
+      if (row.event_id && row.event_id.trim() !== '') {
+        const ids = row.event_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (ids.length > 0) {
+          // Get the first event
+          firstEventId = ids[0];
+          const event = eventsMap.get(firstEventId);
+          if (event) {
+            eventTitle = event.title;
+            eventDate = event.event_date;
+          }
+        }
+      }
+
+      return {
+        id: row.id,
+        idea: row.idea,
+        description: row.description || '',
+        email: row.email,
+        likes: row.likes || 0,
+        technologies: row.technologies || '',
+        image_url: row.image_url || null,
+        github_repo: row.github_repo || null,
+        event_id: firstEventId,
+        event_title: eventTitle,
+        event_date: eventDate
+      };
+    });
+
+    res.status(200).json({ projects });
+  } catch (error) {
+    console.error('Error fetching featured projects:', error);
+    res.status(500).json({ message: 'Failed to fetch featured projects', error: error.message });
+  }
+});
 
 // GET ideas by event ID with event-specific metadata and vote counts
 router.get('/:eventId', async (req, res) => {
@@ -1246,168 +1450,6 @@ router.post('/admin/merge-ideas', async (req, res) => {
       error: error.message,
       detail: error.detail || error.toString()
     });
-  }
-});
-
-// GET endpoint to get all projects for admin
-router.get('/admin/all-projects', async (req, res) => {
-  try {
-    const query = `
-      SELECT
-        i.id,
-        i.idea,
-        i.description,
-        i.email,
-        i.likes,
-        i.featured,
-        i.technologies,
-        i.image_url,
-        i.created_at,
-        e.id as event_id,
-        e.title as event_title,
-        e.event_date
-      FROM ideas i
-      LEFT JOIN events e ON (
-        i.event_id IS NOT NULL
-        AND i.event_id != ''
-        AND e.id = ANY(string_to_array(i.event_id, ',')::int[])
-      )
-      ORDER BY i.created_at DESC
-    `;
-
-    const result = await pool.query(query);
-
-    if (!result.rows || result.rows.length === 0) {
-      return res.status(200).json({ projects: [] });
-    }
-
-    // Group by idea id to get the earliest event
-    const projectsMap = new Map();
-    result.rows.forEach(row => {
-      if (!projectsMap.has(row.id)) {
-        projectsMap.set(row.id, {
-          id: row.id,
-          idea: row.idea,
-          description: row.description || '',
-          email: row.email,
-          likes: row.likes || 0,
-          featured: row.featured || false,
-          technologies: row.technologies || '',
-          image_url: row.image_url || null,
-          created_at: row.created_at,
-          event_id: row.event_id || null,
-          event_title: row.event_title || 'Unknown Event',
-          event_date: row.event_date || null
-        });
-      } else {
-        // Keep the earliest event date
-        const existing = projectsMap.get(row.id);
-        if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
-          existing.event_id = row.event_id;
-          existing.event_title = row.event_title || 'Unknown Event';
-          existing.event_date = row.event_date;
-        }
-      }
-    });
-
-    const projects = Array.from(projectsMap.values());
-
-    res.status(200).json({ projects });
-  } catch (error) {
-    console.error('Error fetching all projects:', error);
-    res.status(500).json({ message: 'Failed to fetch projects', error: error.message });
-  }
-});
-
-// PUT endpoint to toggle featured status
-router.put('/admin/toggle-featured/:id', async (req, res) => {
-  const { id } = req.params;
-  const { featured } = req.body;
-
-  try {
-    const updateQuery = 'UPDATE ideas SET featured = $1 WHERE id = $2 RETURNING *';
-    const result = await pool.query(updateQuery, [featured, id]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Idea not found' });
-    }
-
-    res.status(200).json({
-      message: `Project ${featured ? 'featured' : 'unfeatured'} successfully`,
-      idea: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error toggling featured status:', error);
-    res.status(500).json({ message: 'Failed to update featured status', error: error.message });
-  }
-});
-
-// GET endpoint to get featured projects
-router.get('/featured-projects', async (req, res) => {
-  try {
-    const query = `
-      SELECT
-        i.id,
-        i.idea,
-        i.description,
-        i.email,
-        i.likes,
-        i.technologies,
-        i.image_url,
-        i.github_repo,
-        e.id as event_id,
-        e.title as event_title,
-        e.event_date
-      FROM ideas i
-      LEFT JOIN events e ON (
-        i.event_id IS NOT NULL
-        AND i.event_id != ''
-        AND e.id = ANY(string_to_array(i.event_id, ',')::int[])
-      )
-      WHERE i.featured = true
-      ORDER BY i.created_at DESC
-    `;
-
-    const result = await pool.query(query);
-
-    if (!result.rows || result.rows.length === 0) {
-      return res.status(200).json({ projects: [] });
-    }
-
-    // Group by idea id to get the earliest event
-    const projectsMap = new Map();
-    result.rows.forEach(row => {
-      if (!projectsMap.has(row.id)) {
-        projectsMap.set(row.id, {
-          id: row.id,
-          idea: row.idea,
-          description: row.description || '',
-          email: row.email,
-          likes: row.likes || 0,
-          technologies: row.technologies || '',
-          image_url: row.image_url || null,
-          github_repo: row.github_repo || null,
-          event_id: row.event_id || null,
-          event_title: row.event_title || 'Unknown Event',
-          event_date: row.event_date || null
-        });
-      } else {
-        // Keep the earliest event date
-        const existing = projectsMap.get(row.id);
-        if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
-          existing.event_id = row.event_id;
-          existing.event_title = row.event_title || 'Unknown Event';
-          existing.event_date = row.event_date;
-        }
-      }
-    });
-
-    const projects = Array.from(projectsMap.values());
-
-    res.status(200).json({ projects });
-  } catch (error) {
-    console.error('Error fetching featured projects:', error);
-    res.status(500).json({ message: 'Failed to fetch featured projects', error: error.message });
   }
 });
 
