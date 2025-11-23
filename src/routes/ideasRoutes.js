@@ -1249,4 +1249,142 @@ router.post('/admin/merge-ideas', async (req, res) => {
   }
 });
 
+// GET endpoint to get all projects for admin
+router.get('/admin/all-projects', async (req, res) => {
+  try {
+    const query = `
+      SELECT
+        i.id,
+        i.idea,
+        i.description,
+        i.email,
+        i.likes,
+        i.featured,
+        i.created_at,
+        e.id as event_id,
+        e.title as event_title,
+        e.event_date
+      FROM ideas i
+      LEFT JOIN events e ON e.id = ANY(string_to_array(i.event_id, ',')::int[])
+      ORDER BY i.created_at DESC
+    `;
+
+    const result = await pool.query(query);
+
+    // Group by idea id to get the earliest event
+    const projectsMap = new Map();
+    result.rows.forEach(row => {
+      if (!projectsMap.has(row.id)) {
+        projectsMap.set(row.id, {
+          id: row.id,
+          idea: row.idea,
+          description: row.description,
+          email: row.email,
+          likes: row.likes,
+          featured: row.featured,
+          created_at: row.created_at,
+          event_title: row.event_title,
+          event_date: row.event_date
+        });
+      } else {
+        // Keep the earliest event date
+        const existing = projectsMap.get(row.id);
+        if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
+          existing.event_title = row.event_title;
+          existing.event_date = row.event_date;
+        }
+      }
+    });
+
+    const projects = Array.from(projectsMap.values());
+
+    res.status(200).json({ projects });
+  } catch (error) {
+    console.error('Error fetching all projects:', error);
+    res.status(500).json({ message: 'Failed to fetch projects', error: error.message });
+  }
+});
+
+// PUT endpoint to toggle featured status
+router.put('/admin/toggle-featured/:id', async (req, res) => {
+  const { id } = req.params;
+  const { featured } = req.body;
+
+  try {
+    const updateQuery = 'UPDATE ideas SET featured = $1 WHERE id = $2 RETURNING *';
+    const result = await pool.query(updateQuery, [featured, id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Idea not found' });
+    }
+
+    res.status(200).json({
+      message: `Project ${featured ? 'featured' : 'unfeatured'} successfully`,
+      idea: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error toggling featured status:', error);
+    res.status(500).json({ message: 'Failed to update featured status', error: error.message });
+  }
+});
+
+// GET endpoint to get featured projects
+router.get('/featured-projects', async (req, res) => {
+  try {
+    const query = `
+      SELECT
+        i.id,
+        i.idea,
+        i.description,
+        i.email,
+        i.likes,
+        i.technologies,
+        i.image_url,
+        i.github_repo,
+        e.id as event_id,
+        e.title as event_title,
+        e.event_date
+      FROM ideas i
+      LEFT JOIN events e ON e.id = ANY(string_to_array(i.event_id, ',')::int[])
+      WHERE i.featured = true
+      ORDER BY i.created_at DESC
+    `;
+
+    const result = await pool.query(query);
+
+    // Group by idea id to get the earliest event
+    const projectsMap = new Map();
+    result.rows.forEach(row => {
+      if (!projectsMap.has(row.id)) {
+        projectsMap.set(row.id, {
+          id: row.id,
+          idea: row.idea,
+          description: row.description,
+          email: row.email,
+          likes: row.likes,
+          technologies: row.technologies,
+          image_url: row.image_url,
+          github_repo: row.github_repo,
+          event_title: row.event_title,
+          event_date: row.event_date
+        });
+      } else {
+        // Keep the earliest event date
+        const existing = projectsMap.get(row.id);
+        if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
+          existing.event_title = row.event_title;
+          existing.event_date = row.event_date;
+        }
+      }
+    });
+
+    const projects = Array.from(projectsMap.values());
+
+    res.status(200).json({ projects });
+  } catch (error) {
+    console.error('Error fetching featured projects:', error);
+    res.status(500).json({ message: 'Failed to fetch featured projects', error: error.message });
+  }
+});
+
 module.exports = router;

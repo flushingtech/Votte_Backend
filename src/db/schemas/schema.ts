@@ -43,6 +43,7 @@ export const ideas = pgTable("ideas", {
   contributors: text("contributors").default(""),
   imageUrl: text("image_url"),
   githubRepo: text("github_repo"),
+  featured: boolean("featured").default(false),
 });
 
 export const likes = pgTable(
