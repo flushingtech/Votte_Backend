@@ -913,4 +913,238 @@ router.delete('/idea/:id/:eventId', async (req, res) => {
 });
 
 
+// Admin endpoint to find potential duplicate ideas
+router.get('/admin/duplicates', async (req, res) => {
+  try {
+    // Get all ideas with their event info
+    const ideasQuery = `
+      SELECT
+        i.id,
+        i.idea,
+        i.email,
+        i.event_id,
+        i.description,
+        i.technologies,
+        i.contributors,
+        i.likes,
+        e.event_date,
+        e.title as event_title
+      FROM ideas i
+      LEFT JOIN events e ON e.id = ANY(string_to_array(i.event_id, ',')::int[])
+      ORDER BY i.idea, e.event_date ASC
+    `;
+
+    const result = await pool.query(ideasQuery);
+    const ideas = result.rows;
+
+    // Group ideas by similar titles using simple string similarity
+    const duplicateGroups = [];
+    const processedIds = new Set();
+
+    for (let i = 0; i < ideas.length; i++) {
+      if (processedIds.has(ideas[i].id)) continue;
+
+      const group = [ideas[i]];
+      processedIds.add(ideas[i].id);
+
+      // Find similar ideas
+      for (let j = i + 1; j < ideas.length; j++) {
+        if (processedIds.has(ideas[j].id)) continue;
+
+        // Check if titles are similar (case-insensitive, normalize whitespace)
+        const title1 = ideas[i].idea.toLowerCase().trim().replace(/\s+/g, ' ');
+        const title2 = ideas[j].idea.toLowerCase().trim().replace(/\s+/g, ' ');
+
+        // Simple similarity: exact match or very similar
+        if (title1 === title2 ||
+            title1.includes(title2) ||
+            title2.includes(title1) ||
+            calculateSimilarity(title1, title2) > 0.7) {
+          group.push(ideas[j]);
+          processedIds.add(ideas[j].id);
+        }
+      }
+
+      // Only include groups with 2+ ideas
+      if (group.length > 1) {
+        duplicateGroups.push({
+          title: group[0].idea,
+          count: group.length,
+          ideas: group
+        });
+      }
+    }
+
+    res.json({ duplicateGroups });
+  } catch (error) {
+    console.error('Error finding duplicates:', error);
+    res.status(500).json({ message: 'Failed to find duplicates' });
+  }
+});
+
+// Helper function for string similarity (Dice's coefficient)
+function calculateSimilarity(str1, str2) {
+  const bigrams1 = getBigrams(str1);
+  const bigrams2 = getBigrams(str2);
+
+  const intersection = bigrams1.filter(bg => bigrams2.includes(bg)).length;
+  return (2 * intersection) / (bigrams1.length + bigrams2.length);
+}
+
+function getBigrams(str) {
+  const bigrams = [];
+  for (let i = 0; i < str.length - 1; i++) {
+    bigrams.push(str.substring(i, i + 2));
+  }
+  return bigrams;
+}
+
+// Admin endpoint to merge ideas
+router.post('/admin/merge-ideas', async (req, res) => {
+  const { ideaIds, adminEmail } = req.body;
+
+  try {
+    // Verify admin
+    const adminCheck = await pool.query('SELECT * FROM admin WHERE email = $1', [adminEmail]);
+    if (adminCheck.rowCount === 0) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    if (!ideaIds || ideaIds.length < 2) {
+      return res.status(400).json({ message: 'Need at least 2 ideas to merge' });
+    }
+
+    // Fetch all ideas to merge with their earliest event date
+    const ideasQuery = `
+      SELECT DISTINCT ON (i.id) i.*,
+        (SELECT MIN(e.event_date)
+         FROM events e
+         WHERE e.id = ANY(string_to_array(i.event_id, ',')::int[])) as earliest_event_date
+      FROM ideas i
+      WHERE i.id = ANY($1)
+      ORDER BY i.id
+    `;
+    const ideasResult = await pool.query(ideasQuery, [ideaIds]);
+    let ideas = ideasResult.rows;
+
+    if (ideas.length < 2) {
+      return res.status(400).json({ message: 'Not enough ideas found to merge' });
+    }
+
+    // Sort by earliest event date to find primary
+    ideas.sort((a, b) => {
+      if (!a.earliest_event_date) return 1;
+      if (!b.earliest_event_date) return -1;
+      return new Date(a.earliest_event_date) - new Date(b.earliest_event_date);
+    });
+
+    // The primary idea is the one with the earliest event date
+    const primaryIdea = ideas[0];
+    const otherIdeas = ideas.slice(1);
+
+    console.log('Merging ideas:', {
+      primary: primaryIdea.id,
+      others: otherIdeas.map(i => i.id)
+    });
+
+    // Start transaction
+    await pool.query('BEGIN');
+
+    try {
+      // Collect all unique event IDs
+      const allEventIds = new Set();
+      ideas.forEach(idea => {
+        idea.event_id.split(',').forEach(eid => allEventIds.add(eid.trim()));
+      });
+
+      // Update primary idea's event_id to include all events
+      const newEventIdString = Array.from(allEventIds).join(',');
+      await pool.query(
+        'UPDATE ideas SET event_id = $1 WHERE id = $2',
+        [newEventIdString, primaryIdea.id]
+      );
+
+      // For each other idea, create idea_event_metadata entries
+      for (const idea of otherIdeas) {
+        const eventIds = idea.event_id.split(',').map(eid => eid.trim());
+
+        for (const eventId of eventIds) {
+          // Create metadata entry
+          await pool.query(`
+            INSERT INTO idea_event_metadata (idea_id, event_id, description, technologies, contributors, is_built, image_url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (idea_id, event_id) DO UPDATE SET
+              description = EXCLUDED.description,
+              technologies = EXCLUDED.technologies,
+              contributors = EXCLUDED.contributors,
+              is_built = EXCLUDED.is_built,
+              image_url = EXCLUDED.image_url
+          `, [
+            primaryIdea.id,
+            eventId,
+            idea.description,
+            idea.technologies,
+            idea.contributors || '',
+            idea.is_built || false,
+            idea.image_url || null
+          ]);
+
+          // Migrate votes to the new idea
+          await pool.query(
+            'UPDATE votes SET idea_id = $1 WHERE idea_id = $2 AND event_id = $3',
+            [primaryIdea.id, idea.id, eventId]
+          );
+
+          // Migrate results/awards
+          await pool.query(
+            'UPDATE results SET winning_idea_id = $1 WHERE winning_idea_id = $2 AND event_id = $3',
+            [primaryIdea.id, idea.id, eventId]
+          );
+        }
+
+        // Migrate likes (they're not event-specific)
+        await pool.query(
+          'UPDATE likes SET idea_id = $1 WHERE idea_id = $2',
+          [primaryIdea.id, idea.id]
+        );
+
+        // Update like count on primary idea
+        const likeCountResult = await pool.query(
+          'SELECT COUNT(*) FROM likes WHERE idea_id = $1',
+          [primaryIdea.id]
+        );
+        await pool.query(
+          'UPDATE ideas SET likes = $1 WHERE id = $2',
+          [likeCountResult.rows[0].count, primaryIdea.id]
+        );
+
+        // Delete the duplicate idea
+        await pool.query('DELETE FROM ideas WHERE id = $1', [idea.id]);
+      }
+
+      await pool.query('COMMIT');
+
+      res.json({
+        message: 'Ideas merged successfully',
+        primaryIdeaId: primaryIdea.id,
+        mergedCount: otherIdeas.length
+      });
+
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      console.error('Transaction error:', error);
+      throw error;
+    }
+
+  } catch (error) {
+    console.error('Error merging ideas:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      message: 'Failed to merge ideas',
+      error: error.message,
+      detail: error.detail || error.toString()
+    });
+  }
+});
+
 module.exports = router;
