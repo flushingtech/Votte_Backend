@@ -1267,11 +1267,19 @@ router.get('/admin/all-projects', async (req, res) => {
         e.title as event_title,
         e.event_date
       FROM ideas i
-      LEFT JOIN events e ON e.id = ANY(string_to_array(i.event_id, ',')::int[])
+      LEFT JOIN events e ON (
+        i.event_id IS NOT NULL
+        AND i.event_id != ''
+        AND e.id = ANY(string_to_array(i.event_id, ',')::int[])
+      )
       ORDER BY i.created_at DESC
     `;
 
     const result = await pool.query(query);
+
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(200).json({ projects: [] });
+    }
 
     // Group by idea id to get the earliest event
     const projectsMap = new Map();
@@ -1280,23 +1288,23 @@ router.get('/admin/all-projects', async (req, res) => {
         projectsMap.set(row.id, {
           id: row.id,
           idea: row.idea,
-          description: row.description,
+          description: row.description || '',
           email: row.email,
-          likes: row.likes,
-          featured: row.featured,
-          technologies: row.technologies,
-          image_url: row.image_url,
+          likes: row.likes || 0,
+          featured: row.featured || false,
+          technologies: row.technologies || '',
+          image_url: row.image_url || null,
           created_at: row.created_at,
-          event_id: row.event_id,
-          event_title: row.event_title,
-          event_date: row.event_date
+          event_id: row.event_id || null,
+          event_title: row.event_title || 'Unknown Event',
+          event_date: row.event_date || null
         });
       } else {
         // Keep the earliest event date
         const existing = projectsMap.get(row.id);
         if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
           existing.event_id = row.event_id;
-          existing.event_title = row.event_title;
+          existing.event_title = row.event_title || 'Unknown Event';
           existing.event_date = row.event_date;
         }
       }
@@ -1351,12 +1359,20 @@ router.get('/featured-projects', async (req, res) => {
         e.title as event_title,
         e.event_date
       FROM ideas i
-      LEFT JOIN events e ON e.id = ANY(string_to_array(i.event_id, ',')::int[])
+      LEFT JOIN events e ON (
+        i.event_id IS NOT NULL
+        AND i.event_id != ''
+        AND e.id = ANY(string_to_array(i.event_id, ',')::int[])
+      )
       WHERE i.featured = true
       ORDER BY i.created_at DESC
     `;
 
     const result = await pool.query(query);
+
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(200).json({ projects: [] });
+    }
 
     // Group by idea id to get the earliest event
     const projectsMap = new Map();
@@ -1365,22 +1381,22 @@ router.get('/featured-projects', async (req, res) => {
         projectsMap.set(row.id, {
           id: row.id,
           idea: row.idea,
-          description: row.description,
+          description: row.description || '',
           email: row.email,
-          likes: row.likes,
-          technologies: row.technologies,
-          image_url: row.image_url,
-          github_repo: row.github_repo,
-          event_id: row.event_id,
-          event_title: row.event_title,
-          event_date: row.event_date
+          likes: row.likes || 0,
+          technologies: row.technologies || '',
+          image_url: row.image_url || null,
+          github_repo: row.github_repo || null,
+          event_id: row.event_id || null,
+          event_title: row.event_title || 'Unknown Event',
+          event_date: row.event_date || null
         });
       } else {
         // Keep the earliest event date
         const existing = projectsMap.get(row.id);
         if (row.event_date && (!existing.event_date || new Date(row.event_date) < new Date(existing.event_date))) {
           existing.event_id = row.event_id;
-          existing.event_title = row.event_title;
+          existing.event_title = row.event_title || 'Unknown Event';
           existing.event_date = row.event_date;
         }
       }
