@@ -794,6 +794,75 @@ router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
   }
 });
 
+// DELETE endpoint to remove contributor from event
+router.delete('/:ideaId/remove-contributor-event/:eventId', async (req, res) => {
+  const { ideaId, eventId } = req.params;
+  const { contributor_email } = req.body;
+
+  if (!contributor_email) {
+    return res.status(400).json({ message: 'Missing contributor email' });
+  }
+
+  try {
+    // Check if metadata exists for this idea+event combination
+    const metadataCheck = await pool.query(
+      'SELECT contributors FROM idea_event_metadata WHERE idea_id = $1 AND event_id = $2',
+      [ideaId, eventId]
+    );
+
+    let contributorsArray = [];
+    let existingContributors = '';
+
+    if (metadataCheck.rowCount === 0) {
+      // First event - get from ideas table
+      const ideaCheck = await pool.query('SELECT contributors FROM ideas WHERE id = $1', [ideaId]);
+      if (ideaCheck.rowCount === 0) {
+        return res.status(404).json({ message: 'Idea not found' });
+      }
+      existingContributors = ideaCheck.rows[0].contributors || '';
+    } else {
+      // Additional event - get from metadata table
+      existingContributors = metadataCheck.rows[0].contributors || '';
+    }
+
+    // Remove any "{}" placeholder and parse existing contributors
+    existingContributors = existingContributors.replace(/{}/g, '').trim();
+    contributorsArray = existingContributors.length > 0 ? existingContributors.split(',').map(c => c.trim()) : [];
+
+    // Check if contributor exists
+    if (!contributorsArray.includes(contributor_email)) {
+      return res.status(400).json({ message: 'Contributor not found' });
+    }
+
+    // Remove contributor
+    contributorsArray = contributorsArray.filter(c => c !== contributor_email);
+    const updatedContributors = contributorsArray.length > 0 ? contributorsArray.join(',') : null;
+
+    // Update the appropriate table
+    if (metadataCheck.rowCount === 0) {
+      // First event - update ideas table
+      await pool.query(
+        'UPDATE ideas SET contributors = $1 WHERE id = $2',
+        [updatedContributors, ideaId]
+      );
+    } else {
+      // Additional event - update metadata table
+      await pool.query(
+        'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+        [updatedContributors, ideaId, eventId]
+      );
+    }
+
+    res.status(200).json({
+      message: 'Contributor removed successfully!',
+      contributors: updatedContributors
+    });
+  } catch (error) {
+    console.error('Error removing contributor from event:', error);
+    res.status(500).json({ message: 'Failed to remove contributor', error: error.message });
+  }
+});
+
 // GET endpoint to fetch ideas where the user is a contributor
 router.get('/contributed/:email', async (req, res) => {
   const { email } = req.params;
