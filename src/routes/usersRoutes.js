@@ -45,8 +45,33 @@ router.get('/profile/:email', async (req, res) => {
   const { email } = req.params;
 
   try {
-    const query = 'SELECT email, name, profile_picture, created_at FROM users WHERE email = $1';
-    const result = await pool.query(query, [email]);
+    const query = `
+      SELECT email, name, profile_picture, github_url, linkedin_url, created_at
+      FROM users
+      WHERE email = $1
+    `;
+    let result;
+    try {
+      result = await pool.query(query, [email]);
+    } catch (err) {
+      // Fallback for instances where the new social columns haven't been migrated yet
+      if (err.code === '42703') { // undefined_column
+        console.warn('Social link columns missing, falling back to legacy profile query:', err.message);
+        const legacyQuery = `
+          SELECT email, name, profile_picture, created_at
+          FROM users
+          WHERE email = $1
+        `;
+        result = await pool.query(legacyQuery, [email]);
+        // Attach nulls so the frontend still gets keys
+        if (result.rows[0]) {
+          result.rows[0].github_url = null;
+          result.rows[0].linkedin_url = null;
+        }
+      } else {
+        throw err;
+      }
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
@@ -131,6 +156,37 @@ router.put('/update-name', async (req, res) => {
   } catch (error) {
     console.error('Error updating name:', error);
     res.status(500).json({ message: 'Failed to update name', error: error.message });
+  }
+});
+
+// PUT update social links (GitHub/LinkedIn)
+router.put('/social-links', async (req, res) => {
+  const { email, githubUrl, linkedinUrl } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
+  try {
+    const query = `
+      UPDATE users
+      SET github_url = $1, linkedin_url = $2
+      WHERE email = $3
+      RETURNING email, name, profile_picture, github_url, linkedin_url, created_at
+    `;
+    const result = await pool.query(query, [githubUrl || null, linkedinUrl || null, email]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      message: 'Social links updated successfully',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error updating social links:', error);
+    res.status(500).json({ message: 'Failed to update social links', error: error.message });
   }
 });
 

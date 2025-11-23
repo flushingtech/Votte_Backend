@@ -123,6 +123,8 @@ export const users = pgTable("users", {
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 255 }).notNull(),
   profilePicture: text("profile_picture"),
+  githubUrl: text("github_url"),
+  linkedinUrl: text("linkedin_url"),
   createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
 });
 
