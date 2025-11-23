@@ -1185,7 +1185,7 @@ router.get('/hackathon-wins/:email', async (req, res) => {
       FROM results r
       JOIN ideas i ON r.winning_idea_id = i.id
       WHERE r.category = 'Hackathon Winner'
-      AND (i.email = $1 OR i.contributors LIKE '%' || $1 || '%');
+      AND i.contributors LIKE '%' || $1 || '%';
     `;
 
     const result = await pool.query(query, [email]);
@@ -1216,7 +1216,7 @@ router.get('/hackathon-wins-details/:email', async (req, res) => {
       FROM results r
       JOIN ideas i ON r.winning_idea_id = i.id
       JOIN events e ON r.event_id = e.id
-      WHERE (i.email = $1 OR i.contributors LIKE '%' || $1 || '%')
+      WHERE i.contributors LIKE '%' || $1 || '%'
         AND r.category IN ('Hackathon Winner', 'Most Creative', 'Most Impactful', 'Most Technical')
       ORDER BY e.event_date DESC;
     `;
