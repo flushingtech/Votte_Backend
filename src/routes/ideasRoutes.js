@@ -5,9 +5,12 @@ const router = express.Router();
 const MAX_IDEAS_PER_USER = 5;
 
 router.post('/submitIdea', async (req, res) => {
-  const { email, idea, description, technologies, event_id, is_built = false, github_repo } = req.body;
+  const { email, idea, description, technologies, event_id, is_built = false, github_repos } = req.body;
 
-  console.log('Received idea submission:', { email, idea, description, technologies, event_id, is_built, github_repo });
+  // Convert github_repos array to JSON string for storage
+  const github_repo = github_repos ? JSON.stringify(github_repos) : null;
+
+  console.log('Received idea submission:', { email, idea, description, technologies, event_id, is_built, github_repos });
 
   try {
     // Check if event exists
@@ -184,9 +187,12 @@ router.get('/allIdeas', async (req, res) => {
 // PUT endpoint to edit an existing idea
 router.put('/editIdea/:id', async (req, res) => {
   const { id } = req.params;
-  const { idea, description, technologies, github_repo } = req.body;
+  const { idea, description, technologies, github_repos } = req.body;
 
-  console.log(`Editing idea ID ${id} with new data:`, { idea, description, technologies, github_repo });
+  // Convert github_repos array to JSON string for storage
+  const github_repo = github_repos ? JSON.stringify(github_repos) : null;
+
+  console.log(`Editing idea ID ${id} with new data:`, { idea, description, technologies, github_repos });
 
   try {
     const updateQuery = `
