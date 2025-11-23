@@ -189,9 +189,6 @@ router.put('/editIdea/:id', async (req, res) => {
   const { id } = req.params;
   const { idea, description, technologies, github_repos } = req.body;
 
-  // Convert github_repos array to JSON string for storage
-  const github_repo = github_repos ? JSON.stringify(github_repos) : null;
-
   console.log(`Editing idea ID ${id} with new data:`, { idea, description, technologies, github_repos });
 
   try {
@@ -212,7 +209,9 @@ router.put('/editIdea/:id', async (req, res) => {
       updates.push(`technologies = $${paramCount++}`);
       values.push(technologies);
     }
-    if (github_repo !== undefined) {
+    if (github_repos !== undefined) {
+      // Convert github_repos array to JSON string for storage
+      const github_repo = github_repos && github_repos.length > 0 ? JSON.stringify(github_repos) : null;
       updates.push(`github_repo = $${paramCount++}`);
       values.push(github_repo);
     }
