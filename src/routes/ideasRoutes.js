@@ -493,6 +493,49 @@ router.put('/admin/toggle-featured/:id', async (req, res) => {
   }
 });
 
+// GET leaderboard - users ranked by hackathon wins
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const query = `
+      WITH user_wins AS (
+        SELECT
+          i.email,
+          COUNT(*) as wins
+        FROM results r
+        JOIN ideas i ON r.winning_idea_id = i.id
+        WHERE r.category = 'Hackathon Winner'
+        GROUP BY i.email
+
+        UNION ALL
+
+        SELECT
+          TRIM(unnest(string_to_array(i.contributors, ','))) as email,
+          COUNT(*) as wins
+        FROM results r
+        JOIN ideas i ON r.winning_idea_id = i.id
+        WHERE r.category = 'Hackathon Winner'
+        AND i.contributors IS NOT NULL
+        AND i.contributors != ''
+        GROUP BY TRIM(unnest(string_to_array(i.contributors, ',')))
+      )
+      SELECT
+        email,
+        SUM(wins) as total_wins
+      FROM user_wins
+      WHERE email IS NOT NULL AND email != ''
+      GROUP BY email
+      ORDER BY total_wins DESC, email ASC
+    `;
+
+    const result = await pool.query(query);
+
+    res.status(200).json({ leaderboard: result.rows });
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    res.status(500).json({ message: 'Failed to fetch leaderboard', error: error.message });
+  }
+});
+
 // GET endpoint to get featured projects
 router.get('/featured-projects', async (req, res) => {
   try {
