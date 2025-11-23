@@ -136,6 +136,12 @@ router.put('/update-name', async (req, res) => {
     return res.status(400).json({ message: 'Name cannot be empty' });
   }
 
+  const trimmedName = name.trim();
+  const MAX_NAME_LENGTH = 10;
+  if (trimmedName.length > MAX_NAME_LENGTH) {
+    return res.status(400).json({ message: `Name too long. Please keep it under ${MAX_NAME_LENGTH} characters.` });
+  }
+
   try {
     const query = `
       UPDATE users
@@ -143,7 +149,7 @@ router.put('/update-name', async (req, res) => {
       WHERE email = $2
       RETURNING email, name, profile_picture, created_at
     `;
-    const result = await pool.query(query, [name.trim(), email]);
+    const result = await pool.query(query, [trimmedName, email]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
