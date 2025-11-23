@@ -195,13 +195,41 @@ router.put('/editIdea/:id', async (req, res) => {
   console.log(`Editing idea ID ${id} with new data:`, { idea, description, technologies, github_repos });
 
   try {
+    // Build dynamic update query based on provided fields
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (idea !== undefined) {
+      updates.push(`idea = $${paramCount++}`);
+      values.push(idea);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramCount++}`);
+      values.push(description);
+    }
+    if (technologies !== undefined) {
+      updates.push(`technologies = $${paramCount++}`);
+      values.push(technologies);
+    }
+    if (github_repo !== undefined) {
+      updates.push(`github_repo = $${paramCount++}`);
+      values.push(github_repo);
+    }
+
+    // Always update timestamp
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+
+    // Add id as the last parameter
+    values.push(id);
+
     const updateQuery = `
       UPDATE ideas
-      SET idea = $1, description = $2, technologies = $3, github_repo = $4, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount}
       RETURNING *;
     `;
-    const result = await pool.query(updateQuery, [idea, description, technologies, github_repo, id]);
+    const result = await pool.query(updateQuery, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Idea not found' });
