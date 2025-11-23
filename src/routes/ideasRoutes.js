@@ -507,12 +507,14 @@ router.get('/leaderboard', async (req, res) => {
         AND i.contributors != ''
       )
       SELECT
-        email,
+        cw.email,
+        COALESCE(u.name, SPLIT_PART(cw.email, '@', 1)) as display_name,
         COUNT(*) as total_wins
-      FROM contributor_wins
-      WHERE email IS NOT NULL AND email != ''
-      GROUP BY email
-      ORDER BY total_wins DESC, email ASC
+      FROM contributor_wins cw
+      LEFT JOIN users u ON cw.email = u.email
+      WHERE cw.email IS NOT NULL AND cw.email != ''
+      GROUP BY cw.email, u.name
+      ORDER BY total_wins DESC, display_name ASC
     `;
 
     const result = await pool.query(query);

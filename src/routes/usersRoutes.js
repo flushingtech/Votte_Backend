@@ -1,5 +1,7 @@
 const express = require('express');
 const pool = require('../../db');
+const { upload } = require('../helper/multer');
+const { cloudinaryUploadFiles } = require('../helper/cloudinaryConfig');
 const router = express.Router();
 
 // GET all users (for contributor dropdown)
@@ -36,6 +38,138 @@ router.get('/join-date/:email', async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch join date', error: error.message })
     }
 
+});
+
+// GET user profile by email
+router.get('/profile/:email', async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    const query = 'SELECT email, name, profile_picture, created_at FROM users WHERE email = $1';
+    const result = await pool.query(query, [email]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({ user: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    res.status(500).json({ message: 'Failed to fetch user profile', error: error.message });
+  }
+});
+
+// POST upload profile picture
+router.post('/upload-profile-picture/:email', upload, async (req, res) => {
+  try {
+    const { email } = req.params;
+    const files = req.files;
+
+    if (!files || files.length === 0) {
+      console.log('❌ No files uploaded');
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Check if user exists
+    const userCheck = await pool.query('SELECT email FROM users WHERE email = $1', [email]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Upload to Cloudinary
+    const uploaded = await cloudinaryUploadFiles(files, 'votte_profile_pics', `profile-${email.split('@')[0]}`);
+
+    // Update user's profile_picture in database
+    const query = `
+      UPDATE users
+      SET profile_picture = $1
+      WHERE email = $2
+      RETURNING email, profile_picture
+    `;
+    const result = await pool.query(query, [uploaded[0].cloudinary_url, email]);
+
+    res.status(200).json({
+      message: 'Profile picture uploaded successfully',
+      user: result.rows[0],
+      imageUrl: uploaded[0].cloudinary_url
+    });
+  } catch (error) {
+    console.error('❌ Error uploading profile picture:', error);
+    res.status(500).json({ message: 'Failed to upload profile picture', error: error.message });
+  }
+});
+
+// PUT update username
+router.put('/update-name', async (req, res) => {
+  const { email, name } = req.body;
+
+  if (!email || !name) {
+    return res.status(400).json({ message: 'Email and name are required' });
+  }
+
+  if (name.trim().length === 0) {
+    return res.status(400).json({ message: 'Name cannot be empty' });
+  }
+
+  try {
+    const query = `
+      UPDATE users
+      SET name = $1
+      WHERE email = $2
+      RETURNING email, name, profile_picture, created_at
+    `;
+    const result = await pool.query(query, [name.trim(), email]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      message: 'Name updated successfully',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error updating name:', error);
+    res.status(500).json({ message: 'Failed to update name', error: error.message });
+  }
+});
+
+// POST get display names for emails
+router.post('/display-names', async (req, res) => {
+  const { emails } = req.body;
+
+  if (!emails || !Array.isArray(emails)) {
+    return res.status(400).json({ message: 'Emails array is required' });
+  }
+
+  try {
+    const query = `
+      SELECT
+        email,
+        COALESCE(name, SPLIT_PART(email, '@', 1)) as display_name
+      FROM users
+      WHERE email = ANY($1)
+    `;
+    const result = await pool.query(query, [emails]);
+
+    // Create a map of email -> display_name
+    const nameMap = {};
+    result.rows.forEach(row => {
+      nameMap[row.email] = row.display_name;
+    });
+
+    // For emails not in database, use email username as fallback
+    emails.forEach(email => {
+      if (!nameMap[email]) {
+        nameMap[email] = email.split('@')[0];
+      }
+    });
+
+    res.status(200).json({ names: nameMap });
+  } catch (error) {
+    console.error('Error fetching display names:', error);
+    res.status(500).json({ message: 'Failed to fetch display names', error: error.message });
+  }
 });
 
 module.exports = router;
