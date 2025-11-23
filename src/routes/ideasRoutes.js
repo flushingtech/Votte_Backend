@@ -1207,12 +1207,16 @@ router.get('/hackathon-wins-details/:email', async (req, res) => {
 
   try {
     const query = `
-      SELECT e.id AS event_id, e.title AS event_title, e.event_date
+      SELECT 
+        e.id AS event_id, 
+        e.title AS event_title, 
+        e.event_date,
+        r.category
       FROM results r
       JOIN ideas i ON r.winning_idea_id = i.id
       JOIN events e ON r.event_id = e.id
-      WHERE r.category = 'Hackathon Winner'
-      AND (i.email = $1 OR i.contributors LIKE '%' || $1 || '%')
+      WHERE (i.email = $1 OR i.contributors LIKE '%' || $1 || '%')
+        AND r.category IN ('Hackathon Winner', 'Most Creative', 'Most Impactful', 'Most Technical')
       ORDER BY e.event_date DESC;
     `;
 
