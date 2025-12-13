@@ -326,28 +326,67 @@ router.put("/set-sub-stage/:id", async (req, res) => {
 
 router.put('/:eventId/check-in', async (req, res) => {
     const { eventId } = req.params;
-    const { email } = req.body;
-  
+    const { email, projectIds } = req.body; // projectIds is array of idea IDs user worked on
+
     try {
       const eventResult = await pool.query('SELECT checked_in FROM events WHERE id = $1', [eventId]);
-  
+
       if (eventResult.rowCount === 0) {
         return res.status(404).json({ message: 'Event not found' });
       }
-  
+
       let existing = eventResult.rows[0].checked_in || '';
       existing = existing.replace(/{}/g, '').trim();
       const emails = existing ? existing.split(',') : [];
-  
+
       if (emails.includes(email)) {
         return res.status(400).json({ message: 'Already checked in' });
       }
-  
+
       emails.push(email);
       const updated = emails.join(',');
-  
+
       await pool.query('UPDATE events SET checked_in = $1 WHERE id = $2', [updated, eventId]);
-  
+
+      // Add user as contributor to selected projects for this event
+      if (projectIds && Array.isArray(projectIds) && projectIds.length > 0) {
+        for (const ideaId of projectIds) {
+          // Get current metadata for this idea-event combination
+          const metadataQuery = `
+            SELECT contributors
+            FROM idea_event_metadata
+            WHERE idea_id = $1 AND event_id = $2
+          `;
+          const metadataResult = await pool.query(metadataQuery, [ideaId, eventId]);
+
+          let contributors = '';
+          if (metadataResult.rowCount > 0) {
+            // Metadata exists, update contributors
+            contributors = metadataResult.rows[0].contributors || '';
+            const contributorsList = contributors ? contributors.split(',').map(c => c.trim()) : [];
+
+            if (!contributorsList.includes(email)) {
+              contributorsList.push(email);
+              contributors = contributorsList.join(',');
+
+              const updateQuery = `
+                UPDATE idea_event_metadata
+                SET contributors = $1
+                WHERE idea_id = $2 AND event_id = $3
+              `;
+              await pool.query(updateQuery, [contributors, ideaId, eventId]);
+            }
+          } else {
+            // No metadata exists, create it with this user as contributor
+            const insertQuery = `
+              INSERT INTO idea_event_metadata (idea_id, event_id, contributors)
+              VALUES ($1, $2, $3)
+            `;
+            await pool.query(insertQuery, [ideaId, eventId, email]);
+          }
+        }
+      }
+
       res.status(200).json({ message: 'Checked in successfully' });
     } catch (err) {
       console.error('Check-in error:', err);
