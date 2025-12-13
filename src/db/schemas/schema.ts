@@ -151,3 +151,35 @@ export const ideaEventMetadata = pgTable("idea_event_metadata", {
   }).onDelete("cascade"),
   uniqueIdeaEvent: unique("unique_idea_event").on(table.ideaId, table.eventId)
 }));
+
+export const contributorRequests = pgTable(
+  "contributor_requests",
+  {
+    id: serial().primaryKey().notNull(),
+    ideaId: integer("idea_id").notNull(),
+    eventId: integer("event_id").notNull(),
+    requesterEmail: varchar("requester_email", { length: 255 }).notNull(),
+    message: text("message"),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    contributorRequestsIdeaIdFkey: foreignKey({
+      columns: [table.ideaId],
+      foreignColumns: [ideas.id],
+      name: "contributor_requests_idea_id_fkey",
+    }).onDelete("cascade"),
+    contributorRequestsEventIdFkey: foreignKey({
+      columns: [table.eventId],
+      foreignColumns: [events.id],
+      name: "contributor_requests_event_id_fkey",
+    }).onDelete("cascade"),
+    uniquePendingRequest: unique("unique_pending_request").on(
+      table.ideaId,
+      table.eventId,
+      table.requesterEmail,
+      table.status
+    ),
+  })
+);

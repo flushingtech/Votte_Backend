@@ -40,6 +40,31 @@ router.get('/join-date/:email', async (req, res) => {
 
 });
 
+// GET user email by username (for cleaner URLs)
+router.get('/email-by-username/:username', async (req, res) => {
+  const { username } = req.params;
+
+  try {
+    const query = `
+      SELECT email
+      FROM users
+      WHERE email LIKE $1
+      ORDER BY created_at ASC
+      LIMIT 1
+    `;
+    const result = await pool.query(query, [`${username}@%`]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({ email: result.rows[0].email });
+  } catch (error) {
+    console.error('Error fetching user email by username:', error);
+    res.status(500).json({ message: 'Failed to fetch user email', error: error.message });
+  }
+});
+
 // GET user profile by email
 router.get('/profile/:email', async (req, res) => {
   const { email } = req.params;

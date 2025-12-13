@@ -92,6 +92,55 @@
       "when": 1752346893917,
       "tag": "0012_known_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1731004800000,
+      "tag": "0013_unique_idea_event",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1731696000000,
+      "tag": "0014_event_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1732190400000,
+      "tag": "0015_add_github_repo",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1732320000000,
+      "tag": "0016_add_featured_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1732350000000,
+      "tag": "0017_add_profile_picture_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1732359000000,
+      "tag": "0018_add_social_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1765653600000,
+      "tag": "0019_add_contributor_requests",
+      "breakpoints": true
     }
   ]
 }
