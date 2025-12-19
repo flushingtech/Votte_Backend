@@ -4,6 +4,7 @@ const axios = require('axios');
 require('dotenv').config();
 
 const pool = require('../../db'); // same style as your other files
+const { sendWelcomeEmail } = require('../services/emailService');
 const router = express.Router();
 
 const SECRET_KEY = process.env.JWT_SECRET;
@@ -50,6 +51,11 @@ router.post('/googlelogin', async (req, res) => {
       const insertQuery = 'INSERT INTO users (email, name) VALUES ($1, $2)';
       await pool.query(insertQuery, [email, name]);
       console.log(`🆕 Inserted new user: ${email}`);
+
+      // Step 4.5: Send welcome email (non-blocking)
+      sendWelcomeEmail(email, name).catch(err => {
+        console.error('⚠️ Failed to send welcome email, but user created successfully:', err.message);
+      });
     }
 
     // Step 5: Generate token and send response
