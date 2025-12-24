@@ -71,7 +71,9 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
- ALTER TABLE "idea_event_metadata" ADD CONSTRAINT "unique_idea_event" UNIQUE("idea_id","event_id");
-EXCEPTION
- WHEN duplicate_object THEN null;
+ IF NOT EXISTS (
+   SELECT 1 FROM pg_constraint WHERE conname = 'unique_idea_event'
+ ) THEN
+   ALTER TABLE "idea_event_metadata" ADD CONSTRAINT "unique_idea_event" UNIQUE("idea_id","event_id");
+ END IF;
 END $$;
