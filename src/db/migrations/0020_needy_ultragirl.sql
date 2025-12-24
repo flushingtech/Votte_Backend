@@ -10,14 +10,54 @@ CREATE TABLE IF NOT EXISTS "contributor_requests" (
 	CONSTRAINT "unique_pending_request" UNIQUE("idea_id","event_id","requester_email","status")
 );
 --> statement-breakpoint
-ALTER TABLE "events" ADD COLUMN "canceled" boolean DEFAULT false;--> statement-breakpoint
-ALTER TABLE "events" ADD COLUMN "cancellation_reason" text;--> statement-breakpoint
-ALTER TABLE "idea_event_metadata" ADD COLUMN "image_url" text;--> statement-breakpoint
-ALTER TABLE "ideas" ADD COLUMN "github_repo" text;--> statement-breakpoint
-ALTER TABLE "ideas" ADD COLUMN "featured" boolean DEFAULT false;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "profile_picture" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "github_url" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "linkedin_url" text;--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "events" ADD COLUMN "canceled" boolean DEFAULT false;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "events" ADD COLUMN "cancellation_reason" text;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "idea_event_metadata" ADD COLUMN "image_url" text;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "ideas" ADD COLUMN "github_repo" text;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "ideas" ADD COLUMN "featured" boolean DEFAULT false;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "users" ADD COLUMN "profile_picture" text;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "users" ADD COLUMN "github_url" text;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "users" ADD COLUMN "linkedin_url" text;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "contributor_requests" ADD CONSTRAINT "contributor_requests_idea_id_fkey" FOREIGN KEY ("idea_id") REFERENCES "public"."ideas"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
