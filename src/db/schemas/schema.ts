@@ -25,6 +25,8 @@ export const events = pgTable("events", {
   currentSubStage: text("current_sub_stage").default("1"),
   imageUrl: text("image_url"),
   checkedIn: text("checked_in").default(""),
+  canceled: boolean("canceled").default(false),
+  cancellationReason: text("cancellation_reason"),
 });
 
 export const ideas = pgTable("ideas", {

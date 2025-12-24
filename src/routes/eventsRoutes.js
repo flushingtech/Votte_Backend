@@ -176,6 +176,41 @@ router.post("/add-event", async (req, res) => {
   
   
 
+// Cancel an event (admin only)
+router.put("/cancel-event/:id", async (req, res) => {
+    const { id } = req.params;
+    const { email, cancellationReason } = req.body;
+
+    try {
+        // Check if user is admin
+        const adminResult = await pool.query(
+            "SELECT email FROM admin WHERE email = $1",
+            [email]
+        );
+        if (adminResult.rowCount === 0) {
+            return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        // Update the event to mark it as canceled
+        const result = await pool.query(
+            "UPDATE events SET canceled = true, cancellation_reason = $1 WHERE id = $2 RETURNING *",
+            [cancellationReason, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+
+        res.json({
+            message: "Event canceled successfully",
+            event: result.rows[0],
+        });
+    } catch (error) {
+        console.error("Error canceling event:", error.message);
+        res.status(500).json({ message: "Failed to cancel event" });
+    }
+});
+
 // Delete an event
 router.delete("/delete-event/:id", async (req, res) => {
     const { id } = req.params;
