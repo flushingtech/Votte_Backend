@@ -70,4 +70,8 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
-ALTER TABLE "idea_event_metadata" ADD CONSTRAINT "unique_idea_event" UNIQUE("idea_id","event_id");
+DO $$ BEGIN
+ ALTER TABLE "idea_event_metadata" ADD CONSTRAINT "unique_idea_event" UNIQUE("idea_id","event_id");
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
