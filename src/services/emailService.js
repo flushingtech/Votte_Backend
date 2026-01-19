@@ -202,7 +202,7 @@ const getWelcomeEmailHTML = (name) => {
             <div class="divider"></div>
 
             <p style="font-size: 14px; color: #94a3b8;">
-              Questions? Reach out to us at <a href="mailto:support@flushingtech.org" class="support-link">support@flushingtech.org</a>
+              Questions? Reach out to us at <a href="mailto:flushingtech.nyc@gmail.com" class="support-link">flushingtech.nyc@gmail.com</a>
             </p>
 
             <p style="margin-top: 30px; color: #64748b; font-size: 14px;">
@@ -252,7 +252,7 @@ WHAT YOU CAN DO:
 
 Ready to start building? Visit: ${process.env.SERVER_URL || 'https://votte.flushingtech.org'}/home
 
-Questions? Reach out at support@flushingtech.org
+Questions? Reach out at flushingtech.nyc@gmail.com
 
 Happy hacking! 🎉
 — The FlushingTech Team`,
