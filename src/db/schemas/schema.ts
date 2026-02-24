@@ -27,6 +27,7 @@ export const events = pgTable("events", {
   checkedIn: text("checked_in").default(""),
   canceled: boolean("canceled").default(false),
   cancellationReason: text("cancellation_reason"),
+  eventType: varchar("event_type", { length: 50 }).default("hackathon"),
 });
 
 export const ideas = pgTable("ideas", {

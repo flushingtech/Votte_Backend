@@ -147,7 +147,7 @@ router.post("/sync-meetup-events", async (req, res) => {
 
 // Add an event (requires admin)
 router.post("/add-event", async (req, res) => {
-    const { email, title, eventDate } = req.body;
+    const { email, title, eventDate, eventType = 'hackathon' } = req.body;
     try {
       const adminResult = await pool.query(
         "SELECT email FROM admin WHERE email = $1",
@@ -156,15 +156,15 @@ router.post("/add-event", async (req, res) => {
       if (adminResult.rowCount === 0) {
         return res.status(403).json({ message: "Unauthorized" });
       }
-  
+
       // Convert to Eastern Time midnight and shift to UTC
       const easternMidnight = new Date(
         new Date(`${new Date(eventDate).toISOString().split("T")[0]}T00:00:00-04:00`).toISOString()
       );
-  
+
       const result = await pool.query(
-        "INSERT INTO events (title, event_date) VALUES ($1, $2) RETURNING *",
-        [title, easternMidnight]
+        "INSERT INTO events (title, event_date, event_type) VALUES ($1, $2, $3) RETURNING *",
+        [title, easternMidnight, eventType]
       );
   
       res.status(201).json(result.rows[0]);
