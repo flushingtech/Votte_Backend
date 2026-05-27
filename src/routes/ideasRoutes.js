@@ -533,19 +533,22 @@ router.get('/featured-projects', async (req, res) => {
     // First get all featured ideas
     const ideasQuery = `
       SELECT
-        id,
-        idea,
-        description,
-        email,
-        likes,
-        technologies,
-        image_url,
-        github_repo,
-        event_id,
-        created_at
-      FROM ideas
-      WHERE featured = true
-      ORDER BY created_at DESC
+        i.id,
+        i.idea,
+        i.description,
+        i.email,
+        i.likes,
+        i.technologies,
+        i.image_url,
+        i.github_repo,
+        i.event_id,
+        i.created_at,
+        u.profile_picture,
+        u.name AS contributor_name
+      FROM ideas i
+      LEFT JOIN users u ON u.email = i.email
+      WHERE i.featured = true
+      ORDER BY i.created_at DESC
     `;
 
     const ideasResult = await pool.query(ideasQuery);
@@ -607,7 +610,9 @@ router.get('/featured-projects', async (req, res) => {
         github_repo: row.github_repo || null,
         event_id: firstEventId,
         event_title: eventTitle,
-        event_date: eventDate
+        event_date: eventDate,
+        profile_picture: row.profile_picture || null,
+        contributor_name: row.contributor_name || null,
       };
     });
 
