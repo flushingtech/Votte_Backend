@@ -494,8 +494,12 @@ router.put('/admin/toggle-featured/:id', async (req, res) => {
 });
 
 // GET leaderboard - users ranked by hackathon wins (contributors only)
+// Pass ?limit=all to get every entry; defaults to top 5
 router.get('/leaderboard', async (req, res) => {
   try {
+    const limitParam = req.query.limit;
+    const limitClause = (limitParam === 'all') ? '' : 'LIMIT 5';
+
     const query = `
       WITH contributor_wins AS (
         SELECT
@@ -529,10 +533,10 @@ router.get('/leaderboard', async (req, res) => {
       FROM contributor_wins cw
       LEFT JOIN users u ON cw.email = u.email
       LEFT JOIN ranked_projects rp ON rp.email = cw.email AND rp.rn = 1
-      WHERE cw.email IS NOT NULL AND cw.email != ''
+      WHERE cw.email IS NOT NULL AND cw.email != '' AND cw.email != '{}'
       GROUP BY cw.email, u.name, u.profile_picture, rp.image_url, rp.idea_title
       ORDER BY total_wins DESC, display_name ASC
-      LIMIT 5
+      ${limitClause}
     `;
 
     const result = await pool.query(query);
@@ -541,6 +545,66 @@ router.get('/leaderboard', async (req, res) => {
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
     res.status(500).json({ message: 'Failed to fetch leaderboard', error: error.message });
+  }
+});
+
+// GET leaderboard - users ranked by total votes received on ideas they contributed to
+// Only counts contributors (i.contributors), NOT the uploader (i.email)
+router.get('/leaderboard/votes', async (req, res) => {
+  try {
+    const query = `
+      WITH idea_contributors AS (
+        SELECT i.id AS idea_id,
+               TRIM(unnest(string_to_array(i.contributors, ','))) AS email
+        FROM ideas i
+        WHERE i.contributors IS NOT NULL AND i.contributors != ''
+      )
+      SELECT
+        ic.email,
+        COALESCE(u.name, SPLIT_PART(ic.email, '@', 1)) AS display_name,
+        u.profile_picture,
+        COUNT(v.id) AS total_votes
+      FROM idea_contributors ic
+      JOIN votes v ON v.idea_id = ic.idea_id
+      LEFT JOIN users u ON u.email = ic.email
+      WHERE ic.email IS NOT NULL AND ic.email != '' AND ic.email != '{}'
+      GROUP BY ic.email, u.name, u.profile_picture
+      ORDER BY total_votes DESC, display_name ASC
+    `;
+    const result = await pool.query(query);
+    res.status(200).json({ leaderboard: result.rows });
+  } catch (error) {
+    console.error('Error fetching votes leaderboard:', error);
+    res.status(500).json({ message: 'Failed to fetch votes leaderboard', error: error.message });
+  }
+});
+
+// GET leaderboard - users ranked by distinct events participated
+router.get('/leaderboard/events', async (req, res) => {
+  try {
+    const query = `
+      WITH idea_contributors AS (
+        SELECT i.event_id,
+               TRIM(unnest(string_to_array(i.contributors, ','))) AS email
+        FROM ideas i
+        WHERE i.contributors IS NOT NULL AND i.contributors != ''
+      )
+      SELECT
+        ic.email,
+        COALESCE(u.name, SPLIT_PART(ic.email, '@', 1)) AS display_name,
+        u.profile_picture,
+        COUNT(DISTINCT ic.event_id) AS events_count
+      FROM idea_contributors ic
+      LEFT JOIN users u ON u.email = ic.email
+      WHERE ic.email IS NOT NULL AND ic.email != '' AND ic.email != '{}'
+      GROUP BY ic.email, u.name, u.profile_picture
+      ORDER BY events_count DESC, display_name ASC
+    `;
+    const result = await pool.query(query);
+    res.status(200).json({ leaderboard: result.rows });
+  } catch (error) {
+    console.error('Error fetching events leaderboard:', error);
+    res.status(500).json({ message: 'Failed to fetch events leaderboard', error: error.message });
   }
 });
 
