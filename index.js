@@ -15,6 +15,7 @@ const usersRoutes = require('./src/routes/usersRoutes');
 const imageRoutes = require('./src/routes/imageRoutes'); // ✅ New image upload route
 const analyticsRoutes = require('./src/routes/analyticsRoutes'); // ✅ Google Analytics route
 const contributorRequestsRoutes = require('./src/routes/contributorRequestsRoutes');
+const searchRoutes = require('./src/routes/searchRoutes');
 
 const pool = require('./db');  // PostgreSQL connection
 require('./src/auth');         // Google OAuth setup
@@ -65,6 +66,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/images', imageRoutes); // ✅ New route
 app.use('/api/analytics', analyticsRoutes); // ✅ Analytics route
 app.use('/api/contributor-requests', contributorRequestsRoutes);
+app.use('/api/search', searchRoutes);
 
 // Default root
 app.get('/', (req, res) => {

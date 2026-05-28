@@ -499,23 +499,40 @@ router.get('/leaderboard', async (req, res) => {
     const query = `
       WITH contributor_wins AS (
         SELECT
-          TRIM(unnest(string_to_array(i.contributors, ','))) as email
+          TRIM(unnest(string_to_array(i.contributors, ','))) AS email,
+          i.image_url,
+          i.idea AS idea_title,
+          e.event_date
         FROM results r
         JOIN ideas i ON r.winning_idea_id = i.id
+        LEFT JOIN events e ON r.event_id = e.id
         WHERE r.category = 'Hackathon Winner'
         AND i.contributors IS NOT NULL
         AND i.contributors != ''
+      ),
+      ranked_projects AS (
+        SELECT
+          email,
+          image_url,
+          idea_title,
+          ROW_NUMBER() OVER (PARTITION BY email ORDER BY event_date DESC) AS rn
+        FROM contributor_wins
+        WHERE image_url IS NOT NULL AND image_url != ''
       )
       SELECT
         cw.email,
-        COALESCE(u.name, SPLIT_PART(cw.email, '@', 1)) as display_name,
+        COALESCE(u.name, SPLIT_PART(cw.email, '@', 1)) AS display_name,
         u.profile_picture,
-        COUNT(*) as total_wins
+        COUNT(*) AS total_wins,
+        rp.image_url AS project_image,
+        rp.idea_title AS project_title
       FROM contributor_wins cw
       LEFT JOIN users u ON cw.email = u.email
+      LEFT JOIN ranked_projects rp ON rp.email = cw.email AND rp.rn = 1
       WHERE cw.email IS NOT NULL AND cw.email != ''
-      GROUP BY cw.email, u.name, u.profile_picture
+      GROUP BY cw.email, u.name, u.profile_picture, rp.image_url, rp.idea_title
       ORDER BY total_wins DESC, display_name ASC
+      LIMIT 5
     `;
 
     const result = await pool.query(query);
