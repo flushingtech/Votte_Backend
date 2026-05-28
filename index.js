@@ -109,6 +109,8 @@ pool.query('SELECT NOW()', (err, res) => {
     }
 });
 
-// Start server
+// Start server (no-op in Vercel serverless, used for local dev)
 const PORT = process.env.PORT || 5500;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+module.exports = app;
