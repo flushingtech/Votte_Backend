@@ -611,13 +611,14 @@ router.get('/leaderboard/events', async (req, res) => {
 // GET endpoint to get featured projects
 router.get('/featured-projects', async (req, res) => {
   try {
-    // First get all featured ideas
+    // Fetch featured ideas with vote count and awards
     const ideasQuery = `
       SELECT
         i.id,
         i.idea,
         i.description,
         i.email,
+        i.contributors,
         i.likes,
         i.technologies,
         i.image_url,
@@ -625,7 +626,10 @@ router.get('/featured-projects', async (req, res) => {
         i.event_id,
         i.created_at,
         u.profile_picture,
-        u.name AS contributor_name
+        u.name AS contributor_name,
+        (SELECT COUNT(*) FROM votes v WHERE v.idea_id = i.id) AS vote_count,
+        (SELECT ARRAY_AGG(r.category ORDER BY r.category)
+         FROM results r WHERE r.winning_idea_id = i.id) AS awards
       FROM ideas i
       LEFT JOIN users u ON u.email = i.email
       WHERE i.featured = true
@@ -636,6 +640,23 @@ router.get('/featured-projects', async (req, res) => {
 
     if (!ideasResult.rows || ideasResult.rows.length === 0) {
       return res.status(200).json({ projects: [] });
+    }
+
+    // Collect all contributor emails for batch profile lookup
+    const allContributorEmails = new Set();
+    ideasResult.rows.forEach(row => {
+      if (row.contributors && row.contributors.trim()) {
+        row.contributors.split(',').map(e => e.trim()).filter(Boolean).forEach(e => allContributorEmails.add(e));
+      }
+    });
+
+    let contributorProfileMap = new Map();
+    if (allContributorEmails.size > 0) {
+      const profilesResult = await pool.query(
+        `SELECT email, name, profile_picture FROM users WHERE email = ANY($1)`,
+        [Array.from(allContributorEmails)]
+      );
+      profilesResult.rows.forEach(u => contributorProfileMap.set(u.email, u));
     }
 
     // Get all unique event IDs
@@ -650,15 +671,11 @@ router.get('/featured-projects', async (req, res) => {
     // Get event details
     let eventsMap = new Map();
     if (eventIds.size > 0) {
-      const eventsQuery = `
-        SELECT id, title, event_date
-        FROM events
-        WHERE id = ANY($1)
-      `;
-      const eventsResult = await pool.query(eventsQuery, [Array.from(eventIds)]);
-      eventsResult.rows.forEach(event => {
-        eventsMap.set(event.id, event);
-      });
+      const eventsResult = await pool.query(
+        `SELECT id, title, event_date FROM events WHERE id = ANY($1)`,
+        [Array.from(eventIds)]
+      );
+      eventsResult.rows.forEach(event => eventsMap.set(event.id, event));
     }
 
     // Combine data
@@ -670,7 +687,6 @@ router.get('/featured-projects', async (req, res) => {
       if (row.event_id && row.event_id.trim() !== '') {
         const ids = row.event_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
         if (ids.length > 0) {
-          // Get the first event
           firstEventId = ids[0];
           const event = eventsMap.get(firstEventId);
           if (event) {
@@ -680,12 +696,27 @@ router.get('/featured-projects', async (req, res) => {
         }
       }
 
+      // Build contributor profiles list
+      const contributorProfiles = [];
+      if (row.contributors && row.contributors.trim()) {
+        row.contributors.split(',').map(e => e.trim()).filter(Boolean).forEach(email => {
+          const profile = contributorProfileMap.get(email);
+          contributorProfiles.push({
+            email,
+            name: profile?.name || email.split('@')[0],
+            profile_picture: profile?.profile_picture || null,
+          });
+        });
+      }
+
       return {
         id: row.id,
         idea: row.idea,
         description: row.description || '',
         email: row.email,
         likes: row.likes || 0,
+        vote_count: parseInt(row.vote_count) || 0,
+        awards: row.awards || [],
         technologies: row.technologies || '',
         image_url: row.image_url || null,
         github_repo: row.github_repo || null,
@@ -694,6 +725,7 @@ router.get('/featured-projects', async (req, res) => {
         event_date: eventDate,
         profile_picture: row.profile_picture || null,
         contributor_name: row.contributor_name || null,
+        contributors: contributorProfiles,
       };
     });
 
