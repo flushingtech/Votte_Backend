@@ -1097,53 +1097,41 @@ router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
       [ideaId, eventId]
     );
 
-    let contributorsArray = [];
-    let existingContributors = '';
-
     if (metadataCheck.rowCount === 0) {
-      // First event - get from ideas table
-      const ideaCheck = await pool.query('SELECT contributors FROM ideas WHERE id = $1', [ideaId]);
-      if (ideaCheck.rowCount === 0) {
+      // No metadata for this event yet — insert a fresh row scoped to this event.
+      // Do NOT fall back to ideas.contributors (that's global/cross-event and causes
+      // false-duplicate errors for users who contributed at a previous event).
+      const ideaExists = await pool.query('SELECT id FROM ideas WHERE id = $1', [ideaId]);
+      if (ideaExists.rowCount === 0) {
         return res.status(404).json({ message: 'Idea not found' });
       }
-      existingContributors = ideaCheck.rows[0].contributors || '';
-    } else {
-      // Additional event - get from metadata table
-      existingContributors = metadataCheck.rows[0].contributors || '';
+      await pool.query(
+        'INSERT INTO idea_event_metadata (idea_id, event_id, contributors) VALUES ($1, $2, $3)',
+        [ideaId, eventId, contributor_email]
+      );
+      return res.status(200).json({ message: 'Contributor added successfully!', contributors: contributor_email });
     }
 
-    // Remove any "{}" placeholder and parse existing contributors
-    existingContributors = existingContributors.replace(/{}/g, '').trim();
-    contributorsArray = existingContributors.length > 0 ? existingContributors.split(',').map(c => c.trim()) : [];
+    // Metadata exists for this event — check duplicates then update
+    let existingContributors = (metadataCheck.rows[0].contributors || '')
+      .replace(/{}/g, '').trim();
+    const contributorsArray = existingContributors.length > 0
+      ? existingContributors.split(',').map(c => c.trim()).filter(Boolean)
+      : [];
 
-    // Check for duplicates
     if (contributorsArray.includes(contributor_email)) {
       return res.status(400).json({ message: 'Contributor already added' });
     }
 
-    // Add new contributor
     contributorsArray.push(contributor_email);
     const updatedContributors = contributorsArray.join(',');
 
-    // Update the appropriate table
-    if (metadataCheck.rowCount === 0) {
-      // First event - update ideas table
-      await pool.query(
-        'UPDATE ideas SET contributors = $1 WHERE id = $2',
-        [updatedContributors, ideaId]
-      );
-    } else {
-      // Additional event - update metadata table
-      await pool.query(
-        'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
-        [updatedContributors, ideaId, eventId]
-      );
-    }
+    await pool.query(
+      'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+      [updatedContributors, ideaId, eventId]
+    );
 
-    res.status(200).json({
-      message: 'Contributor added successfully!',
-      contributors: updatedContributors
-    });
+    res.status(200).json({ message: 'Contributor added successfully!', contributors: updatedContributors });
   } catch (error) {
     console.error('Error adding contributor to event:', error);
     res.status(500).json({ message: 'Failed to add contributor', error: error.message });
