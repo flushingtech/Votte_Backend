@@ -8,7 +8,7 @@ const pool = new Pool({
   // Drop idle connections after 30 s so the pool retires them before the
   // server silently kills them (prevents ECONNRESET on the next query).
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 20000,
   keepAlive: true,
 });
 
