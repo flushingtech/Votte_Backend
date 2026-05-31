@@ -1097,23 +1097,9 @@ router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
       [ideaId, eventId]
     );
 
-    if (metadataCheck.rowCount === 0) {
-      // No metadata for this event yet — insert a fresh row scoped to this event.
-      // Do NOT fall back to ideas.contributors (that's global/cross-event and causes
-      // false-duplicate errors for users who contributed at a previous event).
-      const ideaExists = await pool.query('SELECT id FROM ideas WHERE id = $1', [ideaId]);
-      if (ideaExists.rowCount === 0) {
-        return res.status(404).json({ message: 'Idea not found' });
-      }
-      await pool.query(
-        'INSERT INTO idea_event_metadata (idea_id, event_id, contributors) VALUES ($1, $2, $3)',
-        [ideaId, eventId, contributor_email]
-      );
-      return res.status(200).json({ message: 'Contributor added successfully!', contributors: contributor_email });
-    }
-
-    // Metadata exists for this event — check duplicates then update
-    let existingContributors = (metadataCheck.rows[0].contributors || '')
+    // Build the updated contributors list from per-event metadata (not the global ideas table,
+    // which would cause false-duplicate errors for users who contributed at a previous event).
+    const existingContributors = (metadataCheck.rowCount > 0 ? metadataCheck.rows[0].contributors || '' : '')
       .replace(/{}/g, '').trim();
     const contributorsArray = existingContributors.length > 0
       ? existingContributors.split(',').map(c => c.trim()).filter(Boolean)
@@ -1126,10 +1112,27 @@ router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
     contributorsArray.push(contributor_email);
     const updatedContributors = contributorsArray.join(',');
 
-    await pool.query(
-      'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
-      [updatedContributors, ideaId, eventId]
-    );
+    if (metadataCheck.rowCount > 0) {
+      // Row exists — update it
+      await pool.query(
+        'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+        [updatedContributors, ideaId, eventId]
+      );
+    } else {
+      // No per-event metadata row yet — try INSERT, fall back to UPDATE on conflict
+      try {
+        await pool.query(
+          'INSERT INTO idea_event_metadata (idea_id, event_id, contributors) VALUES ($1, $2, $3)',
+          [ideaId, eventId, contributor_email]
+        );
+      } catch {
+        // Row was created between our SELECT and INSERT — just update it
+        await pool.query(
+          'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+          [updatedContributors, ideaId, eventId]
+        );
+      }
+    }
 
     res.status(200).json({ message: 'Contributor added successfully!', contributors: updatedContributors });
   } catch (error) {
