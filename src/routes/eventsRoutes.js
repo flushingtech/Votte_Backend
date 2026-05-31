@@ -246,6 +246,37 @@ router.put("/uncancel-event/:id", async (req, res) => {
     }
 });
 
+// Update event date
+router.put("/update-event/:id", async (req, res) => {
+    const { id } = req.params;
+    const { event_date, email } = req.body;
+
+    if (!event_date) {
+        return res.status(400).json({ message: 'event_date is required' });
+    }
+
+    try {
+        const adminCheck = await pool.query('SELECT email FROM admin WHERE email = $1', [email]);
+        if (adminCheck.rowCount === 0) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const result = await pool.query(
+            'UPDATE events SET event_date = $1 WHERE id = $2 RETURNING *',
+            [event_date, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+
+        res.status(200).json({ message: 'Event date updated', event: result.rows[0] });
+    } catch (error) {
+        console.error('Error updating event date:', error);
+        res.status(500).json({ message: 'Failed to update event date' });
+    }
+});
+
 // Delete an event
 router.delete("/delete-event/:id", async (req, res) => {
     const { id } = req.params;
