@@ -1113,32 +1113,42 @@ router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
     const updatedContributors = contributorsArray.join(',');
 
     if (metadataCheck.rowCount > 0) {
-      // Row exists — update it
-      const updateResult = await pool.query(
+      await pool.query(
         'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
         [updatedContributors, ideaId, eventId]
       );
-      console.log(`addContributorToIdeaEvent UPDATE rowCount=${updateResult.rowCount} idea=${ideaId} event=${eventId} contributors=${updatedContributors}`);
-      if (updateResult.rowCount === 0) {
-        console.error('UPDATE affected 0 rows — possible type mismatch. Trying cast.');
-        await pool.query(
-          'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2::int AND event_id = $3::int',
-          [updatedContributors, ideaId, eventId]
-        );
-      }
     } else {
-      // No per-event metadata row yet — try INSERT, fall back to UPDATE on conflict
-      console.log(`addContributorToIdeaEvent no metadata row — inserting idea=${ideaId} event=${eventId}`);
       try {
         await pool.query(
           'INSERT INTO idea_event_metadata (idea_id, event_id, contributors) VALUES ($1, $2, $3)',
           [ideaId, eventId, contributor_email]
         );
       } catch (insertErr) {
-        console.error('INSERT failed, trying UPDATE fallback:', insertErr.message);
         await pool.query(
           'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2::int AND event_id = $3::int',
           [updatedContributors, ideaId, eventId]
+        );
+      }
+    }
+
+    // Always sync to ideas.contributors as well — getIdeaById falls back to that column
+    // when the per-event metadata JOIN misses (e.g. type mismatch), so this guarantees
+    // the contributor appears on the project page regardless.
+    const ideaContributorsResult = await pool.query(
+      'SELECT contributors FROM ideas WHERE id = $1',
+      [ideaId]
+    );
+    if (ideaContributorsResult.rowCount > 0) {
+      const globalExisting = (ideaContributorsResult.rows[0].contributors || '')
+        .replace(/{}/g, '').trim();
+      const globalArr = globalExisting.length > 0
+        ? globalExisting.split(',').map(c => c.trim()).filter(Boolean)
+        : [];
+      if (!globalArr.includes(contributor_email)) {
+        globalArr.push(contributor_email);
+        await pool.query(
+          'UPDATE ideas SET contributors = $1 WHERE id = $2',
+          [globalArr.join(','), ideaId]
         );
       }
     }
