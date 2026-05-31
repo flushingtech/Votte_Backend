@@ -1114,21 +1114,30 @@ router.put('/:ideaId/add-contributor-event/:eventId', async (req, res) => {
 
     if (metadataCheck.rowCount > 0) {
       // Row exists — update it
-      await pool.query(
+      const updateResult = await pool.query(
         'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
         [updatedContributors, ideaId, eventId]
       );
+      console.log(`addContributorToIdeaEvent UPDATE rowCount=${updateResult.rowCount} idea=${ideaId} event=${eventId} contributors=${updatedContributors}`);
+      if (updateResult.rowCount === 0) {
+        console.error('UPDATE affected 0 rows — possible type mismatch. Trying cast.');
+        await pool.query(
+          'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2::int AND event_id = $3::int',
+          [updatedContributors, ideaId, eventId]
+        );
+      }
     } else {
       // No per-event metadata row yet — try INSERT, fall back to UPDATE on conflict
+      console.log(`addContributorToIdeaEvent no metadata row — inserting idea=${ideaId} event=${eventId}`);
       try {
         await pool.query(
           'INSERT INTO idea_event_metadata (idea_id, event_id, contributors) VALUES ($1, $2, $3)',
           [ideaId, eventId, contributor_email]
         );
-      } catch {
-        // Row was created between our SELECT and INSERT — just update it
+      } catch (insertErr) {
+        console.error('INSERT failed, trying UPDATE fallback:', insertErr.message);
         await pool.query(
-          'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+          'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2::int AND event_id = $3::int',
           [updatedContributors, ideaId, eventId]
         );
       }
