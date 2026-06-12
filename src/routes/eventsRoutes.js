@@ -440,55 +440,43 @@ router.put('/:eventId/check-in', async (req, res) => {
       existing = existing.replace(/{}/g, '').trim();
       const emails = existing ? existing.split(',') : [];
 
-      if (emails.includes(email)) {
-        return res.status(400).json({ message: 'Already checked in' });
+      const alreadyCheckedIn = emails.includes(email);
+
+      if (!alreadyCheckedIn) {
+        emails.push(email);
+        await pool.query('UPDATE events SET checked_in = $1 WHERE id = $2', [emails.join(','), eventId]);
       }
 
-      emails.push(email);
-      const updated = emails.join(',');
-
-      await pool.query('UPDATE events SET checked_in = $1 WHERE id = $2', [updated, eventId]);
-
-      // Add user as contributor to selected projects for this event
+      // Add user as contributor to selected projects regardless of check-in state.
+      // This handles the case where local frontend state is stale and the user was
+      // already checked in, but still needs to register their project selection.
       if (projectIds && Array.isArray(projectIds) && projectIds.length > 0) {
         for (const ideaId of projectIds) {
-          // Get current metadata for this idea-event combination
-          const metadataQuery = `
-            SELECT contributors
-            FROM idea_event_metadata
-            WHERE idea_id = $1 AND event_id = $2
-          `;
-          const metadataResult = await pool.query(metadataQuery, [ideaId, eventId]);
+          const metadataResult = await pool.query(
+            'SELECT contributors FROM idea_event_metadata WHERE idea_id = $1 AND event_id = $2',
+            [ideaId, eventId]
+          );
 
-          let contributors = '';
           if (metadataResult.rowCount > 0) {
-            // Metadata exists, update contributors
-            contributors = metadataResult.rows[0].contributors || '';
-            const contributorsList = contributors ? contributors.split(',').map(c => c.trim()) : [];
-
+            const contributorsList = (metadataResult.rows[0].contributors || '')
+              .split(',').map(c => c.trim()).filter(Boolean);
             if (!contributorsList.includes(email)) {
               contributorsList.push(email);
-              contributors = contributorsList.join(',');
-
-              const updateQuery = `
-                UPDATE idea_event_metadata
-                SET contributors = $1
-                WHERE idea_id = $2 AND event_id = $3
-              `;
-              await pool.query(updateQuery, [contributors, ideaId, eventId]);
+              await pool.query(
+                'UPDATE idea_event_metadata SET contributors = $1 WHERE idea_id = $2 AND event_id = $3',
+                [contributorsList.join(','), ideaId, eventId]
+              );
             }
           } else {
-            // No metadata exists, create it with this user as contributor
-            const insertQuery = `
-              INSERT INTO idea_event_metadata (idea_id, event_id, contributors)
-              VALUES ($1, $2, $3)
-            `;
-            await pool.query(insertQuery, [ideaId, eventId, email]);
+            await pool.query(
+              'INSERT INTO idea_event_metadata (idea_id, event_id, contributors) VALUES ($1, $2, $3)',
+              [ideaId, eventId, email]
+            );
           }
         }
       }
 
-      res.status(200).json({ message: 'Checked in successfully' });
+      res.status(200).json({ message: alreadyCheckedIn ? 'Already checked in, projects updated' : 'Checked in successfully' });
     } catch (err) {
       console.error('Check-in error:', err);
       res.status(500).json({ message: 'Check-in failed' });
