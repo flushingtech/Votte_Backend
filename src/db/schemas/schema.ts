@@ -155,6 +155,24 @@ export const ideaEventMetadata = pgTable("idea_event_metadata", {
   uniqueIdeaEvent: unique("unique_idea_event").on(table.ideaId, table.eventId)
 }));
 
+export const eventSlides = pgTable(
+  "event_slides",
+  {
+    id: serial().primaryKey().notNull(),
+    eventId: integer("event_id").notNull(),
+    imageUrl: text("image_url").notNull(),
+    slideOrder: integer("slide_order").default(1).notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    eventSlidesEventIdFkey: foreignKey({
+      columns: [table.eventId],
+      foreignColumns: [events.id],
+      name: "event_slides_event_id_fkey",
+    }).onDelete("cascade"),
+  })
+);
+
 export const contributorRequests = pgTable(
   "contributor_requests",
   {

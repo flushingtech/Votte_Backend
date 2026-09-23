@@ -115,7 +115,27 @@ router.get("/all-events", async (req, res) => {
         const dbEvents = await pool.query(
             "SELECT * FROM events ORDER BY event_date ASC"
         );
-        res.json({ events: dbEvents.rows });
+
+        // Retrieve slides for all events and group them by event_id so each
+        // event can carry its own `slides` array (ordered, MVP-only for now).
+        const slidesResult = await pool.query(
+            "SELECT event_id, image_url, slide_order FROM event_slides ORDER BY event_id ASC, slide_order ASC"
+        );
+        const slidesByEventId = {};
+        for (const row of slidesResult.rows) {
+            if (!slidesByEventId[row.event_id]) slidesByEventId[row.event_id] = [];
+            slidesByEventId[row.event_id].push({
+                imageUrl: row.image_url,
+                order: row.slide_order,
+            });
+        }
+
+        const events = dbEvents.rows.map((event) => ({
+            ...event,
+            slides: slidesByEventId[event.id] || [],
+        }));
+
+        res.json({ events });
     } catch (error) {
         console.error("Error fetching events:", error.message);
         res.status(500).json({ message: "Error fetching events" });

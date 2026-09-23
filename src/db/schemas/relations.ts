@@ -6,6 +6,7 @@ import {
   votes,
   results,
   ideaEventMetadata,
+  eventSlides,
 } from "./schema";
 
 export const ideasRelations = relations(ideas, ({ many }) => ({
@@ -19,6 +20,14 @@ export const eventsRelations = relations(events, ({ many }) => ({
   ideas: many(ideas),
   results: many(results),
   metadata: many(ideaEventMetadata),
+  slides: many(eventSlides),
+}));
+
+export const eventSlidesRelations = relations(eventSlides, ({ one }) => ({
+  event: one(events, {
+    fields: [eventSlides.eventId],
+    references: [events.id],
+  }),
 }));
 
 export const likesRelations = relations(likes, ({ one }) => ({

@@ -87,4 +87,45 @@ router.post('/googlelogin', async (req, res) => {
   }
 });
 
+// Dev-only bypass for local testing when Google OAuth can't be used (e.g. the
+// OAuth client's authorized origins don't include localhost yet). Disabled
+// unless DEV_LOGIN_BYPASS_EMAILS is set in the local .env — never set that in
+// production. Skips Google entirely and issues a real JWT for an allow-listed
+// email so the rest of the app behaves exactly as if that user signed in.
+router.post('/dev-login', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ message: 'Not found' });
+  }
+
+  const allowedEmails = (process.env.DEV_LOGIN_BYPASS_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (allowedEmails.length === 0) {
+    return res.status(404).json({ message: 'Not found' });
+  }
+
+  const { email } = req.body;
+  if (!email || !allowedEmails.includes(email.toLowerCase())) {
+    return res.status(403).json({ message: 'Email not allowed for dev login' });
+  }
+
+  const name = email.split('@')[0];
+
+  try {
+    const existingUserResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (existingUserResult.rowCount === 0) {
+      await pool.query('INSERT INTO users (email, name) VALUES ($1, $2)', [email, name]);
+      console.log(`🆕 [dev-login] Inserted new user: ${email}`);
+    }
+
+    const token = generateToken({ email, name });
+    res.status(200).json({ token, user: { email, name } });
+  } catch (error) {
+    console.error('❌ [dev-login] failed:', error.message);
+    res.status(500).json({ message: 'Dev login failed', error: error.message });
+  }
+});
+
 module.exports = router;
