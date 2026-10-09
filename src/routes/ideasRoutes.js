@@ -65,6 +65,7 @@ router.get('/previous-projects', async (req, res) => {
         ideas.id,
         ideas.idea,
         ideas.contributors,
+        ideas.image_url,
         events.title AS event_title,
         events.event_date
       FROM ideas
@@ -89,6 +90,7 @@ router.get('/archived-projects', async (req, res) => {
         ideas.contributors,
         ideas.technologies,
         ideas.is_built,
+        ideas.image_url,
         events.title AS event_title,
         events.event_date
       FROM ideas
