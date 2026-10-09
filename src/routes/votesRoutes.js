@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../../db'); // Database connection
+const { MEMBER_WEIGHT_CTE } = require('../utils/voteWeighting');
 const router = express.Router();
 
 // POST: Submit or Update a Vote
@@ -185,12 +186,19 @@ const determineWinners = async (event_id) => {
     const categories = ["Most Creative", "Most Technical", "Most Impactful"];
 
     for (const category of categories) {
+      // Winners are picked by weighted vote total (see voteWeighting.js) so a
+      // large team's self-votes don't automatically outweigh a solo builder's.
       const winnerQuery = `
-        SELECT idea_id, COUNT(*) AS votes
-        FROM votes
-        WHERE event_id = $1 AND vote_type = $2
-        GROUP BY idea_id
-        ORDER BY votes DESC
+        WITH ${MEMBER_WEIGHT_CTE}
+        SELECT
+          v.idea_id,
+          SUM(1.0 / COALESCE(mw.team_size, 1)) AS raw_votes,
+          ROUND(SUM(1.0 / COALESCE(mw.team_size, 1)))::integer AS votes
+        FROM votes v
+        LEFT JOIN member_weights mw ON mw.email = v.user_email
+        WHERE v.event_id = $1::integer AND v.vote_type = $2
+        GROUP BY v.idea_id
+        ORDER BY raw_votes DESC
         LIMIT 1;
       `;
 
@@ -212,16 +220,21 @@ const determineWinners = async (event_id) => {
 
       await pool.query(upsertQuery, [event_id, category, idea_id, votes]);
 
-      console.log(`Winner for ${category}: Idea ${idea_id} with ${votes} votes.`);
+      console.log(`Winner for ${category}: Idea ${idea_id} with ${votes} weighted votes.`);
     }
 
     // Determine Hackathon Winner (previously Best Overall)
     const bestOverallQuery = `
-      SELECT idea_id, COUNT(*) AS total_votes
-      FROM votes
-      WHERE event_id = $1
-      GROUP BY idea_id
-      ORDER BY total_votes DESC
+      WITH ${MEMBER_WEIGHT_CTE}
+      SELECT
+        v.idea_id,
+        SUM(1.0 / COALESCE(mw.team_size, 1)) AS raw_votes,
+        ROUND(SUM(1.0 / COALESCE(mw.team_size, 1)))::integer AS total_votes
+      FROM votes v
+      LEFT JOIN member_weights mw ON mw.email = v.user_email
+      WHERE v.event_id = $1::integer
+      GROUP BY v.idea_id
+      ORDER BY raw_votes DESC
       LIMIT 1;
     `;
 

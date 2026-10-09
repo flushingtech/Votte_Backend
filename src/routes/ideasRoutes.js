@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../../db');
+const { MEMBER_WEIGHT_CTE } = require('../utils/voteWeighting');
 const router = express.Router();
 
 const MAX_IDEAS_PER_USER = 5;
@@ -744,31 +745,33 @@ router.get('/:eventId', async (req, res) => {
 
   try {
     const query = `
+      WITH ${MEMBER_WEIGHT_CTE}
       SELECT
         i.*,
         COALESCE(m.description, i.description) as description,
         COALESCE(m.technologies, i.technologies) as technologies,
         COALESCE(m.contributors, i.contributors) as contributors,
         COALESCE(m.is_built, i.is_built) as is_built,
-        COALESCE(vote_counts.total_votes, 0) as votes,
-        COALESCE(vote_counts.most_creative_votes, 0) as most_creative_votes,
-        COALESCE(vote_counts.most_technical_votes, 0) as most_technical_votes,
-        COALESCE(vote_counts.most_impactful_votes, 0) as most_impactful_votes
+        COALESCE(ROUND(vote_counts.total_votes::numeric, 2), 0) as votes,
+        COALESCE(ROUND(vote_counts.most_creative_votes::numeric, 2), 0) as most_creative_votes,
+        COALESCE(ROUND(vote_counts.most_technical_votes::numeric, 2), 0) as most_technical_votes,
+        COALESCE(ROUND(vote_counts.most_impactful_votes::numeric, 2), 0) as most_impactful_votes
       FROM ideas i
       LEFT JOIN idea_event_metadata m
-        ON i.id = m.idea_id AND m.event_id = $1
+        ON i.id = m.idea_id AND m.event_id = $1::integer
       LEFT JOIN (
         SELECT
-          idea_id,
-          COUNT(*) as total_votes,
-          COUNT(*) FILTER (WHERE vote_type = 'Most Creative') as most_creative_votes,
-          COUNT(*) FILTER (WHERE vote_type = 'Most Technical') as most_technical_votes,
-          COUNT(*) FILTER (WHERE vote_type = 'Most Impactful') as most_impactful_votes
-        FROM votes
-        WHERE event_id = $1
-        GROUP BY idea_id
+          v.idea_id,
+          SUM(1.0 / COALESCE(mw.team_size, 1)) as total_votes,
+          SUM(CASE WHEN v.vote_type = 'Most Creative' THEN 1.0 / COALESCE(mw.team_size, 1) ELSE 0 END) as most_creative_votes,
+          SUM(CASE WHEN v.vote_type = 'Most Technical' THEN 1.0 / COALESCE(mw.team_size, 1) ELSE 0 END) as most_technical_votes,
+          SUM(CASE WHEN v.vote_type = 'Most Impactful' THEN 1.0 / COALESCE(mw.team_size, 1) ELSE 0 END) as most_impactful_votes
+        FROM votes v
+        LEFT JOIN member_weights mw ON mw.email = v.user_email
+        WHERE v.event_id = $1::integer
+        GROUP BY v.idea_id
       ) vote_counts ON i.id = vote_counts.idea_id
-      WHERE (',' || i.event_id || ',') LIKE '%,' || $1 || ',%'
+      WHERE (',' || i.event_id || ',') LIKE '%,' || $1::text || ',%'
     `;
     const result = await pool.query(query, [eventId]);
     res.status(200).json({ ideas: result.rows });
