@@ -185,74 +185,78 @@ const determineWinners = async (event_id) => {
 
     const categories = ["Most Creative", "Most Technical", "Most Impactful"];
 
-    for (const category of categories) {
-      // Winners are picked by weighted vote total (see voteWeighting.js) so a
-      // large team's self-votes don't automatically outweigh a solo builder's.
-      const winnerQuery = `
-        WITH ${MEMBER_WEIGHT_CTE}
+    // Shared by every category and the overall tally below: finds every idea
+    // tied for the top weighted vote total (see voteWeighting.js), not just
+    // one. Rounded to 2 decimals before comparing so floating-point noise
+    // (e.g. 1/3 three times not landing on exactly 1.0) doesn't split a real
+    // tie into "winners" and "near-winners".
+    const topTiedQuery = (voteTypeFilter) => `
+      WITH ${MEMBER_WEIGHT_CTE},
+      weighted AS (
         SELECT
           v.idea_id,
-          SUM(1.0 / COALESCE(mw.team_size, 1)) AS raw_votes,
-          ROUND(SUM(1.0 / COALESCE(mw.team_size, 1)))::integer AS votes
+          ROUND(SUM(1.0 / COALESCE(mw.team_size, 1))::numeric, 2) AS weighted_votes
         FROM votes v
         LEFT JOIN member_weights mw ON mw.email = v.user_email
-        WHERE v.event_id = $1::integer AND v.vote_type = $2
+        WHERE v.event_id = $1::integer ${voteTypeFilter ? "AND v.vote_type = $2" : ""}
         GROUP BY v.idea_id
-        ORDER BY raw_votes DESC
-        LIMIT 1;
-      `;
+      ),
+      max_votes AS (
+        SELECT MAX(weighted_votes) AS max_weighted FROM weighted
+      )
+      SELECT idea_id, weighted_votes
+      FROM weighted, max_votes
+      WHERE weighted_votes = max_votes.max_weighted;
+    `;
 
-      const { rows } = await pool.query(winnerQuery, [event_id, category]);
+    // Every visitor's browser calls determineWinners when Stage 3 mounts, so
+    // concurrent calls are routine, not an edge case. Upsert-then-prune (both
+    // steps idempotent) instead of delete-then-insert, so two overlapping
+    // calls converge on the same correct state instead of racing each other
+    // into a duplicate-key error.
+    const syncCategoryWinners = async (category, rows) => {
+      for (const { idea_id, weighted_votes } of rows) {
+        const votes = Math.round(Number(weighted_votes));
+        await pool.query(
+          `INSERT INTO results (event_id, category, winning_idea_id, votes)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (event_id, category, winning_idea_id)
+           DO UPDATE SET votes = $4, created_at = NOW()`,
+          [event_id, category, idea_id, votes]
+        );
+      }
+
+      const ideaIds = rows.map((r) => r.idea_id);
+      if (ideaIds.length > 0) {
+        // Prune anyone who was a winner before but lost the tie this time.
+        await pool.query(
+          `DELETE FROM results WHERE event_id = $1 AND category = $2 AND NOT (winning_idea_id = ANY($3::integer[]))`,
+          [event_id, category, ideaIds]
+        );
+      } else {
+        await pool.query(`DELETE FROM results WHERE event_id = $1 AND category = $2`, [event_id, category]);
+      }
+    };
+
+    for (const category of categories) {
+      const { rows } = await pool.query(topTiedQuery(true), [event_id, category]);
+      await syncCategoryWinners(category, rows);
 
       if (rows.length === 0) {
         console.log(`No votes found for ${category}`);
-        continue;
+      } else {
+        const ideaIds = rows.map((r) => r.idea_id).join(', ');
+        console.log(`Winner(s) for ${category}: Idea(s) ${ideaIds}${rows.length > 1 ? ' (tied)' : ''}.`);
       }
-
-      const { idea_id, votes } = rows[0];
-
-      const upsertQuery = `
-        INSERT INTO results (event_id, category, winning_idea_id, votes)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (event_id, category)
-        DO UPDATE SET winning_idea_id = $3, votes = $4, created_at = NOW();
-      `;
-
-      await pool.query(upsertQuery, [event_id, category, idea_id, votes]);
-
-      console.log(`Winner for ${category}: Idea ${idea_id} with ${votes} weighted votes.`);
     }
 
-    // Determine Hackathon Winner (previously Best Overall)
-    const bestOverallQuery = `
-      WITH ${MEMBER_WEIGHT_CTE}
-      SELECT
-        v.idea_id,
-        SUM(1.0 / COALESCE(mw.team_size, 1)) AS raw_votes,
-        ROUND(SUM(1.0 / COALESCE(mw.team_size, 1)))::integer AS total_votes
-      FROM votes v
-      LEFT JOIN member_weights mw ON mw.email = v.user_email
-      WHERE v.event_id = $1::integer
-      GROUP BY v.idea_id
-      ORDER BY raw_votes DESC
-      LIMIT 1;
-    `;
-
-    const { rows: bestOverallRows } = await pool.query(bestOverallQuery, [event_id]);
+    // Determine Hackathon Winner(s) (previously Best Overall) — same tie handling, across all vote types.
+    const { rows: bestOverallRows } = await pool.query(topTiedQuery(false), [event_id]);
+    await syncCategoryWinners('Hackathon Winner', bestOverallRows);
 
     if (bestOverallRows.length > 0) {
-      const { idea_id, total_votes } = bestOverallRows[0];
-
-      const bestOverallInsertQuery = `
-        INSERT INTO results (event_id, category, winning_idea_id, votes)
-        VALUES ($1, 'Hackathon Winner', $2, $3)
-        ON CONFLICT (event_id, category)
-        DO UPDATE SET winning_idea_id = $2, votes = $3, created_at = NOW();
-      `;
-
-      await pool.query(bestOverallInsertQuery, [event_id, idea_id, total_votes]);
-
-      console.log(`Hackathon Winner: Idea ${idea_id} with ${total_votes} votes.`);
+      const ideaIds = bestOverallRows.map((r) => r.idea_id).join(', ');
+      console.log(`Hackathon Winner(s): Idea(s) ${ideaIds}${bestOverallRows.length > 1 ? ' (tied)' : ''}.`);
     }
 
     console.log(`Winners determined successfully for event ${event_id}.`);
@@ -289,7 +293,8 @@ router.get('/results', async (req, res) => {
 
   try {
     const resultQuery = `
-      SELECT 
+      SELECT
+        r.id,
         r.category,
         r.winning_idea_id,
         r.votes,
@@ -297,7 +302,8 @@ router.get('/results', async (req, res) => {
         i.description AS idea_description
       FROM results r
       JOIN ideas i ON r.winning_idea_id = i.id
-      WHERE r.event_id = $1;
+      WHERE r.event_id = $1
+      ORDER BY r.category, r.winning_idea_id;
     `;
 
     const { rows } = await pool.query(resultQuery, [event_id]);

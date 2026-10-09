@@ -118,7 +118,9 @@ export const results = pgTable(
       foreignColumns: [ideas.id],
       name: "results_winning_idea_id_fkey",
     }).onDelete("cascade"),
-    uniqueEventCategory: unique("unique_event_category").on(table.eventId, table.category),
+    // One (event, category) can now have multiple rows when a category ties —
+    // this just stops the same idea being inserted twice for the same tie.
+    uniqueEventCategoryIdea: unique("unique_event_category_idea").on(table.eventId, table.category, table.winningIdeaId),
   })
 );
 
