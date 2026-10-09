@@ -21,36 +21,37 @@ router.post("/check-admin", async (req, res) => {
     }
 });
 
-// Title Correspondence Mapping
-const titleCorrespondence = {
-    "Bi-Weekly Tech Jams": "Flushing Tech Bi-Weekly Hackathon",
-    "Office Hours": "Flushing Tech: Office Hour",
-    "Happy Hour": "Flushing Tech Happy Hour",
-    "Virtual Hackathons": "Flushing Tech Virtual Hackathon",
+// Only these exact Meetup RSS titles get synced into events, each mapped to
+// the event_type it should be created with. Anything else from the feed
+// (office hours, happy hours, one-off events, etc.) is skipped entirely.
+const SYNCED_EVENT_TYPES = {
+    "Flushing Tech Bi-Weekly Hackathon": "hackathon",
+    "Jamaica Tech Bi-Weekly Hackathon": "hackathon",
+    "Flushing Tech Bi-weekly Online Workshops": "live_coding",
 };
-
-
 
 async function fetchRssAndAddEvents() {
     const rssUrl = "https://www.meetup.com/flushing-tech/events/rss";
-  
+
     try {
       console.log("Fetching RSS feed...");
       const rssResponse = await axios.get(rssUrl);
       const rssData = rssResponse.data;
-  
+
       const parsedResult = await parseStringPromise(rssData);
       const rssItems = parsedResult.rss.channel[0].item;
-  
+
       for (const item of rssItems) {
         if (!item.link || !item.link[0]) continue;
-  
+
         const link = item.link[0];
         if (await isEventInDatabase(link)) continue;
-  
-        const originalTitle = item.title[0];
-        const eventTitle = titleCorrespondence[originalTitle] || originalTitle;
-  
+
+        const originalTitle = (item.title[0] || "").trim();
+        const eventType = SYNCED_EVENT_TYPES[originalTitle];
+        if (!eventType) continue; // not one of the synced event titles
+        const eventTitle = originalTitle;
+
         let eventDate;
         try {
           eventDate = await getEventDate(link); // Expected to return a Date object
@@ -58,20 +59,19 @@ async function fetchRssAndAddEvents() {
           console.error(`Error extracting date for event "${originalTitle}":`, err.message);
           continue;
         }
-  
-        if (eventTitle.toLowerCase().includes("happy hour")) continue;
+
         if (!(eventDate instanceof Date) || isNaN(eventDate.getTime())) continue;
-  
+
         // Skip events before June 13, 2025
         const june13 = new Date("2025-06-13");
         if (eventDate < june13) continue;
 
         const dateOnly = eventDate.toISOString().split("T")[0];
-  
+
         const easternMidnight = new Date(
           new Date(`${dateOnly}T00:00:00-04:00`).toISOString()
         );
-  
+
         if (await isEventTileDateInDatabase(eventTitle, easternMidnight)) {
           await pool.query(
             "UPDATE events SET link = $1 WHERE event_date = $2 AND link IS NULL",
@@ -80,10 +80,10 @@ async function fetchRssAndAddEvents() {
           console.log(`Updated event link for ${eventTitle} on ${dateOnly}`);
         } else {
           await pool.query(
-            "INSERT INTO events (title, event_date, link) VALUES ($1, $2, $3)",
-            [eventTitle, easternMidnight, link]
+            "INSERT INTO events (title, event_date, event_type, link) VALUES ($1, $2, $3, $4)",
+            [eventTitle, easternMidnight, eventType, link]
           );
-          console.log(`Inserted new event: ${eventTitle} on ${dateOnly}`);
+          console.log(`Inserted new event: ${eventTitle} (${eventType}) on ${dateOnly}`);
         }
       }
   
