@@ -66,22 +66,22 @@ async function fetchRssAndAddEvents() {
         const june13 = new Date("2025-06-13");
         if (eventDate < june13) continue;
 
-        const dateOnly = eventDate.toISOString().split("T")[0];
+        // event_date is a plain DATE column, so store the Eastern calendar
+        // date as a "YYYY-MM-DD" string directly — never a UTC Date instant.
+        // en-CA gives ISO-ordered YYYY-MM-DD, and the timeZone option
+        // correctly accounts for EDT vs EST instead of hardcoding one.
+        const dateOnly = eventDate.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
-        const easternMidnight = new Date(
-          new Date(`${dateOnly}T00:00:00-04:00`).toISOString()
-        );
-
-        if (await isEventTileDateInDatabase(eventTitle, easternMidnight)) {
+        if (await isEventTileDateInDatabase(eventTitle, dateOnly)) {
           await pool.query(
             "UPDATE events SET link = $1 WHERE event_date = $2 AND link IS NULL",
-            [link, easternMidnight]
+            [link, dateOnly]
           );
           console.log(`Updated event link for ${eventTitle} on ${dateOnly}`);
         } else {
           await pool.query(
             "INSERT INTO events (title, event_date, event_type, link) VALUES ($1, $2, $3, $4)",
-            [eventTitle, easternMidnight, eventType, link]
+            [eventTitle, dateOnly, eventType, link]
           );
           console.log(`Inserted new event: ${eventTitle} (${eventType}) on ${dateOnly}`);
         }
@@ -177,14 +177,16 @@ router.post("/add-event", async (req, res) => {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      // Convert to Eastern Time midnight and shift to UTC
-      const easternMidnight = new Date(
-        new Date(`${new Date(eventDate).toISOString().split("T")[0]}T00:00:00-04:00`).toISOString()
-      );
-
+      // event_date is a plain DATE column (no time/timezone), so store the
+      // "YYYY-MM-DD" string the admin picked exactly as-is. Building a UTC
+      // Date instant and letting pg convert it back to a date was the bug:
+      // pg derives the date from that instant using the server process's
+      // *local* timezone, which rolls it back a day whenever that instant
+      // falls before local midnight (reliably during EST, since the old
+      // code also hardcoded the EDT offset year-round).
       const result = await pool.query(
         "INSERT INTO events (title, event_date, event_type) VALUES ($1, $2, $3) RETURNING *",
-        [title, easternMidnight, eventType]
+        [title, eventDate, eventType]
       );
   
       res.status(201).json(result.rows[0]);
