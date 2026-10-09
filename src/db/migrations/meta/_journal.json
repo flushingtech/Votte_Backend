@@ -162,6 +162,13 @@
       "when": 1790123221800,
       "tag": "0022_add_event_slides",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791552981685,
+      "tag": "0023_add_event_hosts",
+      "breakpoints": true
     }
   ]
 }

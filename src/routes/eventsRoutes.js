@@ -299,6 +299,40 @@ router.put("/update-event/:id", async (req, res) => {
     }
 });
 
+// Set which users can see the Present button for this event (admin only).
+// Hosts don't need to be admins themselves — they're scoped to this one
+// event. Stored the same way as checked_in: a comma-separated email list.
+router.put("/:id/hosts", async (req, res) => {
+    const { id } = req.params;
+    const { email, hosts } = req.body;
+
+    try {
+        const adminCheck = await pool.query('SELECT email FROM admin WHERE email = $1', [email]);
+        if (adminCheck.rowCount === 0) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const hostsList = Array.isArray(hosts)
+            ? hosts.map((h) => (h || '').trim()).filter(Boolean)
+            : [];
+        const hostsStr = hostsList.join(',');
+
+        const result = await pool.query(
+            'UPDATE events SET hosts = $1 WHERE id = $2 RETURNING *',
+            [hostsStr, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+
+        res.status(200).json({ message: 'Hosts updated', event: result.rows[0] });
+    } catch (error) {
+        console.error('Error updating event hosts:', error.message);
+        res.status(500).json({ message: 'Failed to update hosts' });
+    }
+});
+
 // Delete an event
 router.delete("/delete-event/:id", async (req, res) => {
     const { id } = req.params;

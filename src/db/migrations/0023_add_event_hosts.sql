@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "hosts" text DEFAULT '';

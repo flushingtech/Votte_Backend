@@ -25,6 +25,7 @@ export const events = pgTable("events", {
   currentSubStage: text("current_sub_stage").default("1"),
   imageUrl: text("image_url"),
   checkedIn: text("checked_in").default(""),
+  hosts: text("hosts").default(""),
   canceled: boolean("canceled").default(false),
   cancellationReason: text("cancellation_reason"),
   eventType: varchar("event_type", { length: 50 }).default("hackathon"),
